@@ -8,7 +8,8 @@
 A Claude Code mod that tells you how good a moment it is to `/compact` now,
 and why, and makes compaction safer. It never compacts by itself.
 
-- **Status line** after every main turn: a score 0–100 and its signals.
+- **Status line** after every main turn, and every 30 s: a score 0–100 and
+  its signals.
 - **Suggestion** past the threshold (70): a ready one-line `/compact …` in the
   empty prompt box, Tab takes it; one toast when the score first crosses.
 - **Guard**: every `/compact` and auto-compaction of the main conversation gets

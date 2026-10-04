@@ -46,3 +46,18 @@ test("a prefix mid-sentence does not count", () => {
     leftoversOf("I will end with Хвосты для агента: нет as usual", RULE),
   ).toEqual({ kind: "unknown" });
 });
+
+test("list marks and bold around the prefix still count", () => {
+  for (const owner of [
+    "+ Хвосты для владельца: push",
+    "1. Хвосты для владельца: push",
+    "2) Хвосты для владельца: push",
+    "**Хвосты для владельца**: push",
+    "- _Хвосты для владельца:_ push",
+  ]) {
+    expect(leftoversOf(`Хвосты для агента: нет\n${owner}`, RULE)).toEqual({
+      kind: "listed",
+      text: "push",
+    });
+  }
+});

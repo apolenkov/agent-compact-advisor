@@ -205,3 +205,36 @@ test("a reload turns a P1 left pending into n/a", async ($, on) => {
   await $.session.start(START);
   expect(seen.statuses.at(-1)).toContain("P1 n/a");
 });
+
+test("an agent finishing between turns is seen within 30 s and offers once", async ($, on) => {
+  const clock = mock.clock(on);
+  const seen = world(on);
+  seen.calls = [];
+  seen.agents = [
+    { id: "a1", description: "review", type: "Explore", status: "running" },
+  ];
+  await $.session.start(START);
+  await measure($, 400_000);
+  await turn($, DONE);
+  await advance(clock, 0);
+  expect(seen.suggested).toEqual([]);
+  seen.agents = [];
+  await advance(clock, 30_000);
+  expect(seen.statuses.at(-1)).toMatch(/^score 98 /u);
+  expect(seen.suggested).toHaveLength(1);
+  await advance(clock, 30_000);
+  expect(seen.suggested).toHaveLength(1);
+});
+
+test("after a reload the cache still goes cold on time", async ($, on) => {
+  const clock = mock.clock(on);
+  const seen = world(on);
+  seen.calls = [];
+  await $.session.start(START);
+  await measure($, 400_000);
+  await turn($, DONE);
+  await advance(clock, 0);
+  await $.session.start(START);
+  await advance(clock, 330_000);
+  expect(seen.statuses.at(-1)).toContain("cache cold");
+});

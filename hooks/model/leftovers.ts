@@ -10,13 +10,20 @@ export interface LeftoverRule {
 }
 
 const TEXT_MAX = 40;
-// Markup a report line may open with: list marks, quotes, bold, code.
-const LEAD = /^[\s*>`_-]+/u;
-// Bold and code marks a value may carry.
+// Bold and code marks, dropped anywhere in a line.
 const MARKS = /[*`]/gu;
+// What a report line may open with: bullets, quotes, italics, then a number.
+const BULLETS = /^[\s>+_-]+/u;
+const NUMBER = /^\d+[.)]\s*/u;
+// An italics mark or a full stop a value may end with.
+const TRAIL = /[._]$/u;
 
 const valueAfter = (line: string, prefix: string): string | undefined => {
-  const bare = line.replace(LEAD, "");
+  const bare = line
+    .replaceAll(MARKS, "")
+    .replace(BULLETS, "")
+    .replace(NUMBER, "")
+    .replace(BULLETS, "");
   return bare.startsWith(prefix) ? bare.slice(prefix.length) : undefined;
 };
 
@@ -43,7 +50,7 @@ export const leftoversOf = (answer: string, rule: LeftoverRule): Leftovers => {
   const values = rule.prefixes
     .map((prefix) => lastValue(lines, prefix))
     .filter((value) => value !== undefined)
-    .map((value) => value.replaceAll(MARKS, "").trim().replace(/\.$/u, ""));
+    .map((value) => value.replace(BULLETS, "").trim().replace(TRAIL, ""));
   const listed = values.find(
     (value) => !rule.noneWords.includes(value.toLowerCase()),
   );

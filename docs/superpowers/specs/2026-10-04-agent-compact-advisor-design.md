@@ -88,7 +88,8 @@ leftovers and no background work.
 
 ## UI
 
-- **Status line** (`$.ui.status`), redrawn on every input change (measure, turn end, P1 result, cache timer):
+- **Status line** (`$.ui.status`), redrawn on measure, turn end, P1 result and every 30 s (agents, background
+  calls and the cache change between turns):
   `compact 82 · 312k 62% · leftovers none · P1 .91 · cache warm`; gated: `compact 0 · too early: 2 agents running`.
   `statusLine: false` clears it.
 - **Suggestion**: when score ≥ `threshold` (default 70), `$.prompt.suggest` a one-line command:
@@ -166,3 +167,15 @@ so a hot reload keeps them; module variables hold nothing. A reload cancels pend
 Review: fable-reviewer, APPROVE WITH CHANGES (2026-10-04); findings 1–8 applied (P1 pending, one-line
 suggestion, fixed Kev question, reload reset, precompute check, no-measurement reason, window-bound fill,
 owner-only default prefixes).
+
+## Code review (codex exec review, 2026-10-04)
+
+1. Redirects: `$.http.fetch` follows 307/308 with the body, so a loopback service could forward the answer.
+   Not changed: whatever listens on loopback already receives the text and can forward it by any means;
+   SECURITY.md says the loopback service is trusted with it.
+2. Markup hid leftover lines (`+`, `1.`, `**prefix**:`): bold/code marks are dropped from the whole line and
+   bullets, quotes, italics and a list number are skipped before the prefix. Fixed, tested.
+3. A hot reload dropped the cache-expiry timer; 4. agents and background calls ending between turns were not
+   redrawn. Both fixed by one redraw every 30 s, started in `session.start` (so a reload restarts it). The
+   suggestion is offered at a turn's end or when the score first crosses the threshold, never re-offered by
+   the timer.

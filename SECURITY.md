@@ -20,5 +20,7 @@ preservation template to the instructions of `/compact` and auto-compaction.
 One network call: the last answer's final 8000 characters are posted to Kev's
 System One endpoint (`systemOneUrl`, default `http://127.0.0.1:8010`) for the
 P1 signal. Only a loopback host is accepted; any other URL, or an empty one,
-turns P1 off and nothing is sent. No key, no telemetry, nothing stored across
-sessions.
+turns P1 off and nothing is sent. Whatever listens on that loopback port
+receives the text and is trusted with it: the host's fetch follows redirects,
+so such a service could pass it on, as it could by any other means. No key, no
+telemetry, nothing stored across sessions.

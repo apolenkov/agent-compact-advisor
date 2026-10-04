@@ -37,8 +37,9 @@ const factsAtom = atom(
 );
 const watchCalls = { plugin: "agent-shell-watch", key: "calls" } as const;
 const LIVE = new Set(["running", "quiet", "hung"]);
-// The cache timer redraws just after the TTL has run out.
-const CACHE_SLACK_MS = 1000;
+// Agents and background calls end between turns, and the cache goes cold:
+// a slow redraw sees it; it outlives no reload, as session.start starts it.
+const REDRAW_MS = 30_000;
 // $.http.fetch has no timeout of its own; Kev's cold start takes seconds.
 const KEV_TIMEOUT_MS = 20_000;
 
@@ -112,11 +113,27 @@ const drawnOf = async ($: Engine, config: Config): Promise<Drawn> => {
   };
 };
 
-const draw = async ($: Engine, config: Config): Promise<void> => {
+// Timer work outlives its dispatch: after a reload or the session's end its
+// environment is gone and every $ call it still makes is refused.
+const quietly = async (work: Promise<void>): Promise<void> => {
+  try {
+    await work;
+  } catch {
+    // Nothing to tell: the session it would have drawn for is gone.
+  }
+};
+
+// The /compact is offered at a turn's end, or when the score first crosses
+// the threshold; a redraw never brings back a suggestion the person dropped.
+const draw = async (
+  $: Engine,
+  config: Config,
+  isTurnEnd: boolean,
+): Promise<void> => {
   const drawn = await drawnOf($, config);
   $.ui.status(config.statusLine ? statusLineOf(drawn) : undefined);
   const isAbove = drawn.verdict.score >= config.threshold;
-  if (isAbove) {
+  if (isAbove && (isTurnEnd || !drawn.facts.wasAbove)) {
     await $.prompt.suggest({ text: SUGGESTION });
   }
   if (isAbove && !drawn.facts.wasAbove) {
@@ -137,7 +154,7 @@ const settleP1 = async (
   config: Config,
   turn: Readonly<{ id: string; answer: string }>,
 ): Promise<void> => {
-  await draw($, config);
+  await draw($, config, true);
   const value = await askKev($, config, turn.answer);
   await update($, factsAtom, (facts): AdvisorFacts =>
     facts.turnId === turn.id
@@ -147,7 +164,7 @@ const settleP1 = async (
         }
       : facts,
   );
-  await draw($, config);
+  await draw($, config, true);
 };
 
 const onCompact = async (
@@ -164,8 +181,8 @@ const onCompact = async (
   );
 };
 
-// session.start fires again on a hot reload, which dropped the timers: a P1
-// still pending would never settle.
+// session.start fires again on a hot reload, which dropped the timers: the
+// redraw starts again, and a P1 still pending would never settle.
 const start = async ($: Engine, config: Config): Promise<void> => {
   await $.command.register({
     name: COMMAND,
@@ -175,7 +192,10 @@ const start = async ($: Engine, config: Config): Promise<void> => {
   await update($, factsAtom, (facts): AdvisorFacts =>
     facts.p1.kind === "pending" ? { ...facts, p1: { kind: "na" } } : facts,
   );
-  await draw($, config);
+  $.clock.every(REDRAW_MS, () => {
+    void quietly(draw($, config, false));
+  });
+  await draw($, config, false);
 };
 
 const noteMeasure = async (
@@ -189,17 +209,7 @@ const noteMeasure = async (
     window: context.window,
     percent: context.percent,
   }));
-  await draw($, config);
-};
-
-// Timer work outlives its dispatch: after a reload or the session's end its
-// environment is gone and every $ call it still makes is refused.
-const quietly = async (work: Promise<void>): Promise<void> => {
-  try {
-    await work;
-  } catch {
-    // Nothing to tell: the session it would have drawn for is gone.
-  }
+  await draw($, config, false);
 };
 
 const noteTurn = async (
@@ -226,11 +236,8 @@ const noteTurn = async (
     void quietly(
       isAsked
         ? settleP1($, config, { id: e.turnId, answer: e.answer })
-        : draw($, config),
+        : draw($, config, true),
     );
-  });
-  $.clock.after(config.cacheTtlMs + CACHE_SLACK_MS, () => {
-    void quietly(draw($, config));
   });
 };
 
@@ -245,7 +252,7 @@ const noteCompaction = async (
     tokens: tokensAfter,
     percent: undefined,
   }));
-  await draw($, config);
+  await draw($, config, false);
 };
 
 /**
