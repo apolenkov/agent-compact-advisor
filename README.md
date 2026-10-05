@@ -1,24 +1,21 @@
-# agent-compact-advisor
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/banner-dark.svg">
+  <img alt="agent-compact-advisor: tells you when your Claude Code session is ready to /compact" src=".github/assets/banner-light.svg" width="100%">
+</picture>
 
 [![ci](https://github.com/apolenkov/agent-compact-advisor/actions/workflows/ci.yml/badge.svg)](https://github.com/apolenkov/agent-compact-advisor/actions/workflows/ci.yml)
 [![codeql](https://github.com/apolenkov/agent-compact-advisor/actions/workflows/codeql.yml/badge.svg)](https://github.com/apolenkov/agent-compact-advisor/actions/workflows/codeql.yml)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/apolenkov/agent-compact-advisor/badge)](https://scorecard.dev/viewer/?uri=github.com/apolenkov/agent-compact-advisor)
+[![release](https://img.shields.io/github/v/release/apolenkov/agent-compact-advisor?sort=semver)](https://github.com/apolenkov/agent-compact-advisor/releases)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Claude Code ≥ 2.1.287](https://img.shields.io/badge/Claude%20Code-%E2%89%A5%202.1.287-8F5400)](https://claude.com/claude-code)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/apolenkov/agent-compact-advisor/badge)](https://scorecard.dev/viewer/?uri=github.com/apolenkov/agent-compact-advisor)
 
 ![Claude Code session: the status line moves from "score 0 · no context reading yet" to "score 100" after a finished turn, a toast says it is a good moment to /compact, Tab takes the suggested /compact, and /compact-advisor then explains the score part by part](demo/demo.gif)
 
 A Claude Code mod that tells you how good a moment it is to `/compact` now,
 and why, and makes compaction safer. It never compacts by itself.
 
-- **Status line** after every main turn, and every 30 s: a score 0–100 and
-  its signals.
-- **Suggestion** past the threshold (70): a ready one-line `/compact …` in the
-  empty prompt box, Tab takes it; one toast when the score first crosses.
-- **Guard**: every `/compact` and auto-compaction of the main conversation gets
-  a preservation template added after your own text (goal, decisions, open
-  leftovers verbatim, absolute file paths, verification results, what not to
-  do). It never cancels a compaction.
-- **`/compact-advisor`**: explains the current score part by part.
+<!-- demo: demo/demo.gif goes here -->
 
 ```
 agent-compact-advisor: score 98 · 400k 40% · leftovers none · P1 .90 · cache warm
@@ -26,7 +23,54 @@ agent-compact-advisor: score 0 · too early: 2 agents running · 400k 40%
 agent-compact-advisor: score 60 · 400k 40% · leftovers unknown · P1 .72 · cache cold
 ```
 
-## The score
+## Why
+
+- Compact too early and you throw away context you still need; too late and
+  the window fills mid-task.
+- Compacting while agents or background calls still run loses track of
+  them.
+- A compaction summary can drop the goal, decisions and open leftovers
+  unless asked to keep them.
+
+## Features
+
+- 📊 **Status line** after every main turn, and every 30 s: a score 0–100
+  and its signals.
+- 💡 **Suggestion** past the threshold (70): a ready one-line `/compact …` in
+  the empty prompt box, Tab takes it; one toast when the score first crosses.
+- 🛡️ **Guard**: every `/compact` and auto-compaction of the main
+  conversation gets a preservation template added after your own text (goal,
+  decisions, open leftovers verbatim, absolute file paths, verification
+  results, what not to do). It never cancels a compaction.
+- 🔍 **`/compact-advisor`** explains the current score part by part.
+
+## Install
+
+Claude Code 2.1.287+ (mods are on by default).
+
+```sh
+claude plugin marketplace add apolenkov/agent-compact-advisor
+claude plugin install agent-compact-advisor@agent-compact-advisor
+```
+
+It is also listed, with its sibling mods, in the
+[agent-watch](https://github.com/apolenkov/agent-watch) marketplace:
+
+```
+/plugin marketplace add apolenkov/agent-watch
+/plugin install agent-compact-advisor@agent-watch
+```
+
+Or try a checkout: `claude --plugin-dir /path/to/agent-compact-advisor`.
+
+## Usage
+
+| Command / key      | What it does                                           |
+| ------------------ | ------------------------------------------------------ |
+| `/compact-advisor` | Explains the current score part by part                |
+| Tab                | Takes the suggested `/compact …` from the empty prompt |
+
+### The score
 
 A score, not a probability: nothing is calibrated.
 
@@ -56,18 +100,12 @@ final 8000 characters, on loopback only, with a 20 s timeout.
 **Background calls** come from
 [agent-shell-watch](https://github.com/apolenkov/agent-shell-watch)'s call list.
 
-## Install
+## Configuration
 
-Claude Code 2.1.287+ (mods are on by default).
+Set in `/config`.
 
-```sh
-claude plugin marketplace add apolenkov/agent-compact-advisor
-claude plugin install agent-compact-advisor@agent-compact-advisor
-```
-
-Or try a checkout: `claude --plugin-dir /path/to/agent-compact-advisor`.
-
-## Settings
+<details>
+<summary><b>All settings</b></summary>
 
 | Setting            | Default                                     |                                                                    |
 | ------------------ | ------------------------------------------- | ------------------------------------------------------------------ |
@@ -82,7 +120,24 @@ Or try a checkout: `claude --plugin-dir /path/to/agent-compact-advisor`.
 | `guardCompactions` | true                                        | add the template to every compaction                               |
 | `statusLine`       | true                                        | show the score                                                     |
 
-See [SECURITY.md](SECURITY.md) for what it reads and sends, and
-[CONTRIBUTING.md](CONTRIBUTING.md) to work on it.
+</details>
 
-`engine-types/claude-code.d.ts` is © Anthropic PBC and not covered by the MIT license; see [engine-types/NOTICE.md](engine-types/NOTICE.md).
+> [!TIP]
+> Without a local Kev server, set `systemOneUrl` empty: the P1 weight is
+> removed and nothing is sent.
+
+## Privacy
+
+One network call, on loopback only: P1 posts the last answer's final 8000
+characters to `systemOneUrl`. No key, no telemetry, nothing stored across
+sessions. See [SECURITY.md](SECURITY.md) for what it reads and sends.
+
+## Development
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) to work on it: `npm ci`, then
+`npm run check`. Questions: [SUPPORT.md](SUPPORT.md).
+
+## License
+
+[MIT](LICENSE). `engine-types/claude-code.d.ts` is © Anthropic PBC and not
+covered by the MIT license; see [engine-types/NOTICE.md](engine-types/NOTICE.md).
