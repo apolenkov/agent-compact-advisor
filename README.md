@@ -5,6 +5,8 @@
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/apolenkov/agent-compact-advisor/badge)](https://scorecard.dev/viewer/?uri=github.com/apolenkov/agent-compact-advisor)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+![Claude Code session: the status line moves from "score 0 · no context reading yet" to "score 100" after a finished turn, a toast says it is a good moment to /compact, Tab takes the suggested /compact, and /compact-advisor then explains the score part by part](demo/demo.gif)
+
 A Claude Code mod that tells you how good a moment it is to `/compact` now,
 and why, and makes compaction safer. It never compacts by itself.
 
