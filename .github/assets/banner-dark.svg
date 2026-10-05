@@ -8,7 +8,7 @@
     <line x1="168" y1="200" x2="206.64" y2="165.21" stroke="#EDF1F7" stroke-width="6" stroke-linecap="round"/>
     <circle cx="168" cy="200" r="9" fill="#EDF1F7"/>
   <circle cx="1112" cy="52" r="6" fill="none" stroke="#7C889C" stroke-width="2"/><circle cx="1134" cy="52" r="6" fill="none" stroke="#7C889C" stroke-width="2"/><circle cx="1156" cy="52" r="7" fill="#F5B451"/>
-  <text x="1094" y="58" text-anchor="end" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="17" font-weight="500" fill="#7C889C">agent-watch</text>
+  <text x="1094" y="58" text-anchor="end" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="17" font-weight="500" fill="#7C889C">agent-mods</text>
   <text x="290" y="148" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="62" font-weight="700" letter-spacing="-1.2" fill="#EDF1F7">agent-compact-advisor</text>
   <text x="292" y="196" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="25" fill="#A3AEC0">Tells you when your Claude Code session is ready to /compact.</text>
   <line x1="292" y1="230" x2="1216" y2="230" stroke="#26324A" stroke-width="1.5"/>

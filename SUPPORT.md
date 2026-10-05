@@ -9,5 +9,5 @@
 - **Working on the code**: see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Sibling mods are listed in the
-[agent-watch](https://github.com/apolenkov/agent-watch) marketplace; each has
+[agent-mods](https://github.com/apolenkov/agent-mods) marketplace; each has
 its own issue tracker.
