@@ -15,7 +15,7 @@
     "prepare": "lefthook install"
   },
   "devDependencies": {
-    "@anthropic-ai/claude-code": "2.1.288",
+    "@anthropic-ai/claude-code": "2.1.289",
     "@commitlint/cli": "21.2.3",
     "@commitlint/config-conventional": "21.2.3",
     "@commitlint/types": "21.2.3",
@@ -26,7 +26,7 @@
     "eslint": "10.12.0",
     "eslint-plugin-functional": "10.0.1",
     "eslint-plugin-import-x": "4.17.1",
-    "eslint-plugin-jsdoc": "65.0.2",
+    "eslint-plugin-jsdoc": "65.1.0",
     "eslint-plugin-regexp": "3.3.1",
     "eslint-plugin-simple-import-sort": "14.0.0",
     "eslint-plugin-sonarjs": "4.2.2",
