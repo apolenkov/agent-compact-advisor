@@ -54,11 +54,11 @@ Claude Code 2.1.287+ (mods are on by default).
 ```
 
 It is also listed, with its sibling mods, in the
-[agent-watch](https://github.com/apolenkov/agent-watch) marketplace:
+[agent-mods](https://github.com/apolenkov/agent-mods) marketplace:
 
 ```
-/plugin marketplace add apolenkov/agent-watch
-/plugin install agent-compact-advisor@agent-watch
+/plugin marketplace add apolenkov/agent-mods
+/plugin install agent-compact-advisor@agent-mods
 ```
 
 Or try a checkout: `claude --plugin-dir /path/to/agent-compact-advisor`.

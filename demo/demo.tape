@@ -1,6 +1,6 @@
 # Records demo/demo.gif: `vhs demo/demo.tape` from the repository root.
 # Needs Claude Code 2.1.287+ with agent-compact-advisor and agent-shell-watch
-# installed from the agent-watch marketplace (shell-watch reports background
+# installed from the agent-mods marketplace (shell-watch reports background
 # calls; without it the score is capped at 60). Runs in an empty project at
 # /tmp/demo-cca without user settings (no personal hooks, status line or other
 # mods) or personal instructions (agents-md managed-only). The thresholds are
@@ -23,7 +23,7 @@ Set TypingSpeed 25ms
 Hide
 Type `unset CLAUDE_CODE_CHILD_SESSION CLAUDECODE; mkdir -p /tmp/demo-cca; cd /tmp/demo-cca; clear`
 Enter
-Type `claude --model haiku --setting-sources project,local --settings '{"enabledPlugins":{"agent-compact-advisor@agent-watch":true,"agent-shell-watch@agent-watch":true},"pluginConfigs":{"agents-md@builtin":{"options":{"instructionFiles":"managed-only"}},"agent-compact-advisor@agent-watch":{"options":{"minTokens":5000,"fullTokens":20000,"systemOneUrl":"","leftoverPrefixes":"Leftovers:"}}}}'`
+Type `claude --model haiku --setting-sources project,local --settings '{"enabledPlugins":{"agent-compact-advisor@agent-mods":true,"agent-shell-watch@agent-mods":true},"pluginConfigs":{"agents-md@builtin":{"options":{"instructionFiles":"managed-only"}},"agent-compact-advisor@agent-mods":{"options":{"minTokens":5000,"fullTokens":20000,"systemOneUrl":"","leftoverPrefixes":"Leftovers:"}}}}'`
 Enter
 Sleep 6s
 # Trusts the folder on a first run; an empty prompt box ignores both keys.
