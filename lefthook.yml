@@ -19,4 +19,4 @@ commit-msg:
 pre-push:
   jobs:
     - name: check
-      run: npm run -s check
+      run: unset GIT_DIR GIT_INDEX_FILE && npm run -s check
