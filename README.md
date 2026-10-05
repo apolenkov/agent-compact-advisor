@@ -3,6 +3,8 @@
   <img alt="agent-compact-advisor: tells you when your Claude Code session is ready to /compact" src=".github/assets/banner-light.svg" width="100%">
 </picture>
 
+![Claude Code session: a small turn reads "too early: context is small (35k)"; after a turn that reads four log files the status line alerts "context 63% — time to compact" although the score is only 66 of 100, the ready /compact appears in the prompt box, Tab takes it, and after the compaction the line resets to "context is small"](demo/demo.gif)
+
 [![ci](https://github.com/apolenkov/agent-compact-advisor/actions/workflows/ci.yml/badge.svg)](https://github.com/apolenkov/agent-compact-advisor/actions/workflows/ci.yml)
 [![codeql](https://github.com/apolenkov/agent-compact-advisor/actions/workflows/codeql.yml/badge.svg)](https://github.com/apolenkov/agent-compact-advisor/actions/workflows/codeql.yml)
 [![release](https://img.shields.io/github/v/release/apolenkov/agent-compact-advisor?sort=semver)](https://github.com/apolenkov/agent-compact-advisor/releases)
@@ -10,12 +12,8 @@
 [![Claude Code ≥ 2.1.287](https://img.shields.io/badge/Claude%20Code-%E2%89%A5%202.1.287-8F5400)](https://claude.com/claude-code)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/apolenkov/agent-compact-advisor/badge)](https://scorecard.dev/viewer/?uri=github.com/apolenkov/agent-compact-advisor)
 
-![Claude Code session: the status line moves from "score 0 · no context reading yet" to "score 100" after a finished turn, a toast says it is a good moment to /compact, Tab takes the suggested /compact, and /compact-advisor then explains the score part by part](demo/demo.gif)
-
 A Claude Code mod that tells you how good a moment it is to `/compact` now,
 and why, and makes compaction safer. It never compacts by itself.
-
-<!-- demo: demo/demo.gif goes here -->
 
 ```
 agent-compact-advisor: хороший момент для /compact: оценка 98 из 100 · контекст 400k (40%) · хвостов нет · цель достигнута с вероятностью 90% · кэш тёплый
@@ -41,7 +39,8 @@ agent-compact-advisor: контекст 61% — пора компактить ·
 - 🚨 **Size alert** from `alertPercent` (60) of the window, whatever the score,
   the gates or the leftovers: the line opens with "контекст 61% — пора
   компактить", one toast per crossing (it re-arms when the share drops, e.g.
-  after a compaction), the `/compact` suggested at each turn end.
+  after a compaction), the `/compact` suggested at each turn end (not while
+  agents or background calls run).
 - 💡 **Suggestion** past the threshold (70): a ready one-line `/compact …` in
   the empty prompt box, Tab takes it; one toast when the score first crosses.
 - 🛡️ **Guard**: every `/compact` and auto-compaction of the main
