@@ -10,6 +10,7 @@
     "repo:lint": "knip && ls-lint",
     "validate": "claude plugin validate --strict . && claude plugin validate --strict .claude-plugin/plugin.json",
     "test": "claude plugin test .",
+    "eval": "claude plugin eval . --trust-plugin --no-publish --ablation none --model haiku",
     "check": "npm run format:check && npm run typecheck && npm run lint && npm run repo:lint && npm run validate && npm test",
     "update-types": "sh scripts/update-types.sh",
     "prepare": "lefthook install"
