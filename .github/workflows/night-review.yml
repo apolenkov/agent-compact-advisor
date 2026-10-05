@@ -104,6 +104,11 @@ jobs:
           incremental: "true"
           checkpoint_range: "true"
           max_tokens_budget: ${{ env.REVIEW_TOKEN_BUDGET }}
+          # Low findings and style/documentation ones go to the summary: an unresolved
+          # inline thread blocks auto-merge (conversation resolution is required on main).
+          # `low` routes only low; `medium` would route medium too.
+          route_severity_below: low
+          route_categories: style,documentation
 
   scan:
     if: github.event_name != 'workflow_run'
