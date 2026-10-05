@@ -27,6 +27,23 @@ agent-compact-advisor needs Claude Code 2.1.287+ (mods are on by default). Try i
 caches type immutability per type, not per rule level, so linting `hooks/` (lite) and
 `hooks/model/` (strict) in one process would make the result depend on file order.
 
+## Live checks
+
+`npm run eval` runs `claude plugin eval` over `evals/`: each case is a real
+headless (`claude -p`) session with only this plugin loaded, and the case sends
+one of the mod's own commands. It covers what the unit tests cannot: that the
+hooks module loads in the engine and registers its command, and that the
+command's answer comes back. The cases need no model turns (about $0, a few
+seconds).
+
+Locally it needs your Claude login or an API key. In CI the `eval` job runs it
+when the repository has the secret `ANTHROPIC_API_KEY`; without the secret
+(a fork, a Dependabot run, no key yet) the job skips its steps and stays green,
+so until someone adds the key this is a local step, not an automatic check.
+
+It cannot see the status line or a pane (a headless session draws none): those
+are checked by hand in an interactive session.
+
 ## Dependency holds
 
 - `typescript` stays on 6.x (6.0.3): `typescript-eslint` 8.71.0, its latest,
