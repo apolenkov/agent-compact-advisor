@@ -91,3 +91,18 @@ test(
     expect(seen.toasts).toEqual([]);
   },
 );
+
+test("the size alert shows but offers no /compact while background work runs", async ($, on) => {
+  const clock = mock.clock(on);
+  const seen = world(on);
+  seen.calls = [{ status: "running" }];
+  await $.session.start(START);
+  await measure($, 650_000);
+  await turn($, DONE);
+  await advance(clock, 0);
+  expect(seen.statuses.at(-1)).toBe(
+    "контекст 65% — пора компактить · рано: идёт фоновая задача · контекст 650k (65%)",
+  );
+  expect(seen.toasts).toHaveLength(1);
+  expect(seen.suggested).toHaveLength(0);
+});
