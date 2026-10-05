@@ -1,8 +1,9 @@
 name: night-review
 
 # Code review by alibaba/open-code-review (OCR) on an OpenCode Go model.
-#   review  every same-repo PR once `ci` has run on it: inline comments and one
-#           sticky summary; a fork's PR is skipped (the jobs show as skipped)
+#   review  every same-repo PR once `ci` has run on it (also after auto-merge) or
+#           on demand by number: inline comments and one sticky summary; a
+#           fork's PR is skipped (the jobs show as skipped)
 #   scan    monthly full-file `ocr scan` of main, uploaded as an artifact
 # The token lives in the `ci` environment, so both jobs name it. `workflow_run`
 # (like ci-autofix) hands a Dependabot PR the same secrets and a write token as
@@ -15,7 +16,12 @@ on:
     types: [completed]
   schedule:
     - cron: "23 3 1 * *"
+  # Without `pr`: the monthly scan on demand. With `pr`: review that PR again.
   workflow_dispatch:
+    inputs:
+      pr:
+        description: PR number to review (empty runs the scan)
+        required: false
 
 permissions: {}
 
@@ -35,11 +41,11 @@ jobs:
   gate:
     # Not a fork's run, and the run belongs to a pull request.
     if: >-
-      github.event_name == 'workflow_run' &&
+      (github.event_name == 'workflow_run' &&
       github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.conclusion != 'cancelled' &&
-      github.event.workflow_run.head_repository.full_name == github.repository &&
-      !startsWith(github.event.workflow_run.head_branch, 'release-please--')
+      github.event.workflow_run.head_repository.full_name == github.repository) ||
+      (github.event_name == 'workflow_dispatch' && inputs.pr != '')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -56,15 +62,24 @@ jobs:
           REPO: ${{ github.repository }}
           HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          PR_INPUT: ${{ inputs.pr }}
         run: |
           set -euo pipefail
           echo "go=false" >> "$GITHUB_OUTPUT"
-          pr=$(gh api -X GET "repos/$REPO/pulls" -f state=open -f head="${REPO%%/*}:$HEAD_BRANCH" --jq '.[0] // empty')
-          [ -n "$pr" ] || { echo "no open PR for $HEAD_BRANCH"; exit 0; }
-          read -r number head_repo head_sha base draft < <(jq -r '[.number, .head.repo.full_name, .head.sha, .base.ref, .draft] | @tsv' <<<"$pr")
+          # Auto-merge often lands the PR before ci's run is reported here, so a
+          # merged PR is reviewed too (its head stays readable as pull/N/head).
+          if [ -n "$PR_INPUT" ]; then
+            [[ "$PR_INPUT" =~ ^[1-9][0-9]*$ ]] || { echo "bad PR number"; exit 0; }
+            pr=$(gh api "repos/$REPO/pulls/$PR_INPUT")
+          else
+            pr=$(gh api -X GET "repos/$REPO/pulls" -f state=all -f head="${REPO%%/*}:$HEAD_BRANCH" --jq '.[0] // empty')
+          fi
+          [ -n "$pr" ] || { echo "no PR for ${HEAD_BRANCH:-$PR_INPUT}"; exit 0; }
+          read -r number head_repo head_sha head_ref base draft < <(jq -r '[.number, .head.repo.full_name, .head.sha, .head.ref, .base.ref, .draft] | @tsv' <<<"$pr")
           [ "$head_repo" = "$REPO" ] || { echo "head repo $head_repo is not $REPO"; exit 0; }
-          [ "$head_sha" = "$HEAD_SHA" ] || { echo "stale run: PR head moved on"; exit 0; }
+          [ -n "$PR_INPUT" ] || [ "$head_sha" = "$HEAD_SHA" ] || { echo "stale run: PR head moved on"; exit 0; }
           [ "$draft" = false ] || { echo "draft PR"; exit 0; }
+          [[ "$head_ref" != release-please--* ]] || { echo "release-please PR"; exit 0; }
           {
             echo "pr=$number"
             echo "sha=$head_sha"
@@ -111,7 +126,7 @@ jobs:
           route_categories: style,documentation
 
   scan:
-    if: github.event_name != 'workflow_run'
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.pr == '')
     runs-on: ubuntu-latest
     timeout-minutes: 120
     environment: ci
