@@ -12,8 +12,7 @@
           "path": ".claude-plugin/plugin.json",
           "jsonpath": "$.version"
         }
-      ],
-      "release-as": "0.1.0"
+      ]
     }
   }
 }
