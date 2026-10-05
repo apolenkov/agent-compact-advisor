@@ -41,8 +41,12 @@ when the repository has the secret `ANTHROPIC_API_KEY`; without the secret
 (a fork, a Dependabot run, no key yet) the job skips its steps and stays green,
 so until someone adds the key this is a local step, not an automatic check.
 
-It cannot see the status line or a pane (a headless session draws none): those
-are checked by hand in an interactive session.
+It cannot see the status line (a headless session draws none).
+`npm run smoke:live` does: it starts a real interactive session in tmux, sends
+one small turn, captures the screen and checks that the status line carries the
+advisor's verdict (`too early: context is small`). It needs tmux and a Claude
+login, takes about 10 s for a cent, and is local only (no tmux session with a
+login in CI).
 
 ## Dependency holds
 
