@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0](https://github.com/apolenkov/agent-compact-advisor/compare/v0.1.0...v0.2.0) (2026-10-05)
+
+
+### Features
+
+* plain-language status, coordinator leftovers setting, context-size alert ([#10](https://github.com/apolenkov/agent-compact-advisor/issues/10)) ([4945bb7](https://github.com/apolenkov/agent-compact-advisor/commit/4945bb747b46e40139449a3d6957d77691a6c1ee))
+
+
+### Bug Fixes
+
+* **repo:** drop the release-as pin so release-please bumps past 0.1.0 ([#12](https://github.com/apolenkov/agent-compact-advisor/issues/12)) ([3291211](https://github.com/apolenkov/agent-compact-advisor/commit/3291211f08be9de1ee7a0933cda4e4f4582e66d2))
+
 ## 0.1.0 (2026-10-04)
 
 
