@@ -8,7 +8,7 @@ import {
   statusLineOf,
   toastOf,
 } from "../../hooks/model/format.ts";
-import type { Gate } from "../../hooks/model/score.ts";
+import type { Gate, Verdict } from "../../hooks/model/score.ts";
 import type { AdvisorFacts } from "../../types";
 
 const FACTS: AdvisorFacts = {
@@ -19,7 +19,7 @@ const FACTS: AdvisorFacts = {
   wasAbove: false,
   wasAlerted: false,
 };
-const PARTS = [
+const PARTS: Verdict["parts"] = [
   { name: "fill", weight: 40, value: 1 },
   { name: "leftovers", weight: 30, value: 1 },
   { name: "P1", weight: 20, value: 0.91 },

@@ -142,12 +142,13 @@ export const statusLineOf = (drawn: Drawn): string =>
     ...headOf(drawn),
   ].join(" · ");
 
-const PART_PHRASES: Readonly<Record<string, Phrase>> = {
-  fill: "partFill",
-  leftovers: "partLeftovers",
-  P1: "partP1",
-  cache: "partCache",
-};
+const PART_PHRASES: Readonly<Record<Verdict["parts"][number]["name"], Phrase>> =
+  {
+    fill: "partFill",
+    leftovers: "partLeftovers",
+    P1: "partP1",
+    cache: "partCache",
+  };
 
 const noteOf = (drawn: Drawn): readonly string[] => {
   const { verdict, facts, config } = drawn;
@@ -156,7 +157,7 @@ const noteOf = (drawn: Drawn): readonly string[] => {
     ? [
         ...verdict.parts.map(
           ({ name, value, weight }) =>
-            `- ${say(language, PART_PHRASES[name] ?? "partFill")}: ${value.toFixed(DECIMALS)} × ${String(weight)}`,
+            `- ${say(language, PART_PHRASES[name])}: ${value.toFixed(DECIMALS)} × ${String(weight)}`,
         ),
         ...(config.ignoreLeftovers ? [say(language, "leftoversIgnored")] : []),
         ...(facts.p1.kind === "na" ? [say(language, "goalNotCounted")] : []),

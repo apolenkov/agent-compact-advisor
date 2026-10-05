@@ -15,7 +15,7 @@ export interface Signals {
 
 /** One weighted part of the score, its value 0..1. */
 interface Part {
-  readonly name: string;
+  readonly name: "fill" | "leftovers" | "P1" | "cache";
   readonly weight: number;
   readonly value: number;
 }
