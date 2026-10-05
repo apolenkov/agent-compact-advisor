@@ -48,9 +48,9 @@ agent-compact-advisor: score 60 · 400k 40% · leftovers unknown · P1 .72 · ca
 
 Claude Code 2.1.287+ (mods are on by default).
 
-```sh
-claude plugin marketplace add apolenkov/agent-compact-advisor
-claude plugin install agent-compact-advisor@agent-compact-advisor
+```
+/plugin marketplace add apolenkov/agent-compact-advisor
+/plugin install agent-compact-advisor@agent-compact-advisor
 ```
 
 It is also listed, with its sibling mods, in the
@@ -121,10 +121,6 @@ Set in `/config`.
 | `statusLine`       | true                                        | show the score                                                     |
 
 </details>
-
-> [!TIP]
-> Without a local Kev server, set `systemOneUrl` empty: the P1 weight is
-> removed and nothing is sent.
 
 ## Privacy
 
