@@ -16,6 +16,9 @@ test("no options give the defaults, Kev on loopback", () => {
     },
     guardCompactions: true,
     statusLine: true,
+    ignoreLeftovers: false,
+    language: "ru",
+    alertPercent: 60,
   });
 });
 
@@ -30,6 +33,9 @@ test("options are read, bad numbers defaulted, lists split on |", () => {
     noneWords: "NOTHING",
     guardCompactions: false,
     statusLine: false,
+    ignoreLeftovers: true,
+    language: "en",
+    alertPercent: 0,
   });
   expect(config.threshold).toBe(100);
   expect(config.minTokens).toBe(100_000);
@@ -42,6 +48,9 @@ test("options are read, bad numbers defaulted, lists split on |", () => {
   });
   expect(config.guardCompactions).toBe(false);
   expect(config.statusLine).toBe(false);
+  expect(config.ignoreLeftovers).toBe(true);
+  expect(config.language).toBe("en");
+  expect(config.alertPercent).toBe(0);
 });
 
 test("P1 is off for an empty or a non-loopback URL", () => {
@@ -52,4 +61,11 @@ test("P1 is off for an empty or a non-loopback URL", () => {
   expect(
     configOf({ systemOneUrl: "https://127.0.0.1.evil.com" }).kevUrl,
   ).toBeUndefined();
+});
+
+test("a bad language or alert percent falls back to the defaults", () => {
+  const config = configOf({ language: "de", alertPercent: 150 });
+  expect(config.language).toBe("ru");
+  expect(config.alertPercent).toBe(60);
+  expect(configOf({ alertPercent: "x" }).alertPercent).toBe(60);
 });

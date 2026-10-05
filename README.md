@@ -18,9 +18,11 @@ and why, and makes compaction safer. It never compacts by itself.
 <!-- demo: demo/demo.gif goes here -->
 
 ```
-agent-compact-advisor: score 98 · 400k 40% · leftovers none · P1 .90 · cache warm
-agent-compact-advisor: score 0 · too early: 2 agents running · 400k 40%
-agent-compact-advisor: score 60 · 400k 40% · leftovers unknown · P1 .72 · cache cold
+agent-compact-advisor: хороший момент для /compact: оценка 98 из 100 · контекст 400k (40%) · хвостов нет · цель достигнута с вероятностью 90% · кэш тёплый
+agent-compact-advisor: можно подождать: оценка 50 из 100 · контекст 400k (40%) · хвосты неизвестны · кэш остыл
+agent-compact-advisor: рано: идёт фоновая задача · контекст 243k (24%)
+agent-compact-advisor: рано: работает 2 агента · контекст 400k (40%)
+agent-compact-advisor: контекст 61% — пора компактить · рано: хвосты — ждать итоги · контекст 610k (61%)
 ```
 
 ## Why
@@ -36,6 +38,10 @@ agent-compact-advisor: score 60 · 400k 40% · leftovers unknown · P1 .72 · ca
 
 - 📊 **Status line** after every main turn, and every 30 s: a score 0–100
   and its signals.
+- 🚨 **Size alert** from `alertPercent` (60) of the window, whatever the score,
+  the gates or the leftovers: the line opens with "контекст 61% — пора
+  компактить", one toast per crossing (it re-arms when the share drops, e.g.
+  after a compaction), the `/compact` suggested at each turn end.
 - 💡 **Suggestion** past the threshold (70): a ready one-line `/compact …` in
   the empty prompt box, Tab takes it; one toast when the score first crosses.
 - 🛡️ **Guard**: every `/compact` and auto-compaction of the main
@@ -75,7 +81,8 @@ Or try a checkout: `claude --plugin-dir /path/to/agent-compact-advisor`.
 A score, not a probability: nothing is calibrated.
 
 Gates set it to 0: no context reading yet, context under `minTokens` (100k),
-running agents, live background calls, or leftovers listed in the last answer.
+running agents, live background calls, or leftovers listed in the last answer
+(unless `ignoreLeftovers`).
 Otherwise it is a weighted sum:
 
 | Part      | Weight | Value                                                                            |
@@ -87,12 +94,20 @@ Otherwise it is a weighted sum:
 
 It is capped at 60 while background work is unknown (agent-shell-watch not
 loaded) or the last answer has no leftover lines, so a suggestion needs both
-known.
+known. With `ignoreLeftovers` the leftovers part leaves the sum (the rest is
+rescaled, as for an absent P1) and never gates or caps: for a coordinator
+session, whose leftovers always say "wait for the others".
 
 **Leftovers** are read from lines starting with `Хвосты для агента:` and
 `Хвосты для владельца:` (the last of each counts; list marks, quotes, bold and
 code are tolerated). Both prefixes and the words meaning none (`нет`, `none`)
 are settings: for an English convention set `leftoverPrefixes` to `Leftovers:`.
+
+**Words.** The status line, toasts and `/compact-advisor` use plain words, no
+abbreviations, in `language`: `ru` (default, like the Russian leftover
+prefixes) or `en`. A gate reads "рано: …" / "too early: …", a score at or
+above `threshold` "хороший момент для /compact: оценка 82 из 100 · …", below
+it "можно подождать: …".
 
 **P1** asks Kev (System One, `kev-latest`) one question over the last answer's
 final 8000 characters, on loopback only, with a 20 s timeout.
@@ -119,6 +134,9 @@ Set in `/config`.
 | `noneWords`        | `нет\|none`                                 | `\|`-separated                                                     |
 | `guardCompactions` | true                                        | add the template to every compaction                               |
 | `statusLine`       | true                                        | show the score                                                     |
+| `ignoreLeftovers`  | false                                       | leftovers neither gate, cap nor count (coordinator sessions)       |
+| `language`         | `ru`                                        | words of the status line, toasts and explanation: `ru` or `en`     |
+| `alertPercent`     | 60                                          | context share (%) that alerts regardless of score; 0 turns it off  |
 
 </details>
 

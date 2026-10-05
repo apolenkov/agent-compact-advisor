@@ -7,12 +7,14 @@ import type { LeftoverRule } from "./leftovers.ts";
 
 const MINUTE = 60_000;
 const MAX_SCORE = 100;
+const MAX_PERCENT = 100;
 const DEFAULTS = {
   threshold: 70,
   minTokens: 100_000,
   fullTokens: 300_000,
   cacheTtlMin: 5,
 } as const;
+const ALERT_PERCENT = 60;
 const SYSTEM_ONE_URL = "http://127.0.0.1:8010";
 const KEV_MODEL = "kev-latest";
 const PREFIXES = "Хвосты для агента:|Хвосты для владельца:";
@@ -32,7 +34,16 @@ export interface Config {
   readonly leftovers: LeftoverRule;
   readonly guardCompactions: boolean;
   readonly statusLine: boolean;
+  /** Leftovers neither gate nor count: for a coordinator that always waits. */
+  readonly ignoreLeftovers: boolean;
+  /** The words of the status line, the toasts and the explanation. */
+  readonly language: Language;
+  /** The context share (%) from which to alert; 0 turns the alert off. */
+  readonly alertPercent: number;
 }
+
+/** The languages the words come in. */
+export type Language = "ru" | "en";
 
 const positive = (
   options: PluginOptions,
@@ -60,6 +71,11 @@ const listOf = (value: string): readonly string[] =>
 const kevUrlOf = (url: string): Readonly<{ kevUrl?: string }> =>
   LOOPBACK.test(url) ? { kevUrl: url.replace(/\/$/u, "") } : {};
 
+const alertOf = (value: unknown): number =>
+  typeof value === "number" && value >= 0 && value <= MAX_PERCENT
+    ? value
+    : ALERT_PERCENT;
+
 /**
  * The config from the options `register` receives.
  * @param options the plugin's `userConfig` values
@@ -81,5 +97,8 @@ export const configOf = (options: PluginOptions): Config => {
     },
     guardCompactions: options["guardCompactions"] !== false,
     statusLine: options["statusLine"] !== false,
+    ignoreLeftovers: options["ignoreLeftovers"] === true,
+    language: options["language"] === "en" ? "en" : "ru",
+    alertPercent: alertOf(options["alertPercent"]),
   };
 };
