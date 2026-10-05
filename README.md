@@ -82,3 +82,5 @@ Or try a checkout: `claude --plugin-dir /path/to/agent-compact-advisor`.
 
 See [SECURITY.md](SECURITY.md) for what it reads and sends, and
 [CONTRIBUTING.md](CONTRIBUTING.md) to work on it.
+
+`engine-types/claude-code.d.ts` is © Anthropic PBC and not covered by the MIT license; see [engine-types/NOTICE.md](engine-types/NOTICE.md).
