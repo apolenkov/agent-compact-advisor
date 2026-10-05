@@ -34,7 +34,7 @@ test(
     expect(seen.statuses.at(-1)).toBe(
       "хороший момент для /compact: оценка 97 из 100 · контекст 400k (40%) · цель достигнута с вероятностью 90% · кэш тёплый",
     );
-    expect(seen.suggested).toHaveLength(1);
+    expect(seen.suggested.at(-1)).toMatch(/^\/compact/u);
   },
 );
 
