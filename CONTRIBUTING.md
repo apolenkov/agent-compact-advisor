@@ -26,3 +26,9 @@ agent-compact-advisor needs Claude Code 2.1.287+ (mods are on by default). Try i
 `npm run lint` lints the pure model in its own ESLint process: eslint-plugin-functional
 caches type immutability per type, not per rule level, so linting `hooks/` (lite) and
 `hooks/model/` (strict) in one process would make the result depend on file order.
+
+## Dependency holds
+
+- `typescript` stays on 6.x (6.0.3): `typescript-eslint` 8.71.0, its latest,
+  declares the peer `typescript >=4.8.4 <6.1.0`. Take TypeScript 7 once it widens
+  that range; drop the Dependabot `ignore` for `typescript` then.
