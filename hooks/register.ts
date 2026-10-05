@@ -20,6 +20,7 @@ import { type Config, configOf } from "./model/config.ts";
 import { type Drawn, explanationOf, statusLineOf } from "./model/format.ts";
 import { kevBodyOf, noulOf } from "./model/kev.ts";
 import { leftoversOf } from "./model/leftovers.ts";
+import { offerOf } from "./model/offer.ts";
 import { isCacheWarm, scoreOf, type Signals } from "./model/score.ts";
 import { SUGGESTION, withTemplate } from "./model/template.ts";
 
@@ -30,6 +31,7 @@ const INITIAL: AdvisorFacts = {
   leftovers: { kind: "unknown" },
   p1: { kind: "na" },
   wasAbove: false,
+  wasAlerted: false,
 };
 const factsAtom = atom(
   { plugin: "agent-compact-advisor", key: "facts" } as const,
@@ -110,6 +112,7 @@ const drawnOf = async ($: Engine, config: Config): Promise<Drawn> => {
     facts: signals.facts,
     isCacheWarm: isCacheWarm(signals, config),
     isBackgroundKnown: signals.liveCalls !== undefined,
+    config,
   };
 };
 
@@ -123,8 +126,6 @@ const quietly = async (work: Promise<void>): Promise<void> => {
   }
 };
 
-// The /compact is offered at a turn's end, or when the score first crosses
-// the threshold; a redraw never brings back a suggestion the person dropped.
 const draw = async (
   $: Engine,
   config: Config,
@@ -132,19 +133,18 @@ const draw = async (
 ): Promise<void> => {
   const drawn = await drawnOf($, config);
   $.ui.status(config.statusLine ? statusLineOf(drawn) : undefined);
-  const isAbove = drawn.verdict.score >= config.threshold;
-  if (isAbove && (isTurnEnd || !drawn.facts.wasAbove)) {
+  const offer = offerOf(drawn, isTurnEnd);
+  if (offer.isSuggested) {
     await $.prompt.suggest({ text: SUGGESTION });
   }
-  if (isAbove && !drawn.facts.wasAbove) {
-    $.ui.toast(
-      `good moment to /compact (${String(drawn.verdict.score)}): Tab takes it`,
-    );
+  if (offer.toast !== "") {
+    $.ui.toast(offer.toast);
   }
-  if (isAbove !== drawn.facts.wasAbove) {
+  if (offer.isChanged) {
     await update($, factsAtom, (facts): AdvisorFacts => ({
       ...facts,
-      wasAbove: isAbove,
+      wasAbove: offer.isAbove,
+      wasAlerted: offer.isAlerted,
     }));
   }
 };
@@ -221,7 +221,7 @@ const noteTurn = async (
   const isAsked =
     config.kevUrl !== undefined &&
     e.reason === "answer" &&
-    leftovers.kind !== "listed";
+    (config.ignoreLeftovers || leftovers.kind !== "listed");
   const now = await $.clock.now();
   await update($, factsAtom, (facts): AdvisorFacts => ({
     ...facts,

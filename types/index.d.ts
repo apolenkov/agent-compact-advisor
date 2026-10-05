@@ -21,6 +21,8 @@ export interface AdvisorFacts {
   readonly lastTurnAt?: number;
   /** Whether the last score drawn stood at the threshold or above. */
   readonly wasAbove: boolean;
+  /** Whether the context share stood at the alert percent or above. */
+  readonly wasAlerted: boolean;
 }
 
 /** The slice of an agent-shell-watch call the advisor reads. */

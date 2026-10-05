@@ -13,6 +13,7 @@ const DONE: AdvisorFacts = {
   p1: { kind: "value", value: 1 },
   lastTurnAt: NOW - 1000,
   wasAbove: false,
+  wasAlerted: false,
 };
 const signals = (over: Partial<Signals> = {}): Signals => ({
   facts: DONE,
@@ -31,21 +32,24 @@ test("a full, finished, warm session scores 100", () => {
 test("each gate sets 0 and names itself, in order", () => {
   expect(scoreOf(facts({ tokens: undefined }), CONFIG)).toMatchObject({
     score: 0,
-    gate: "no context reading yet",
+    gate: { kind: "unread" },
   });
-  expect(scoreOf(facts({ tokens: 99_000 }), CONFIG).gate).toBe(
-    "small context 99k",
-  );
-  expect(scoreOf(signals({ runningAgents: 2 }), CONFIG).gate).toBe(
-    "too early: 2 agents running",
-  );
-  expect(scoreOf(signals({ liveCalls: 1 }), CONFIG).gate).toBe(
-    "too early: 1 background call",
-  );
+  expect(scoreOf(facts({ tokens: 99_000 }), CONFIG).gate).toEqual({
+    kind: "small",
+    tokens: 99_000,
+  });
+  expect(scoreOf(signals({ runningAgents: 2 }), CONFIG).gate).toEqual({
+    kind: "agents",
+    count: 2,
+  });
+  expect(scoreOf(signals({ liveCalls: 1 }), CONFIG).gate).toEqual({
+    kind: "calls",
+    count: 1,
+  });
   expect(
     scoreOf(facts({ leftovers: { kind: "listed", text: "push" } }), CONFIG)
       .gate,
-  ).toBe("leftovers: push");
+  ).toEqual({ kind: "leftovers", text: "push" });
 });
 
 test("P1 not available removes its weight and rescales", () => {
@@ -82,7 +86,7 @@ test("fill grows from minTokens to fullTokens", () => {
 test("unknown background or leftovers cap the score at 60", () => {
   const unknownBg = scoreOf(signals({ liveCalls: undefined }), CONFIG);
   expect(unknownBg.score).toBe(60);
-  expect(unknownBg.caps).toEqual(["background unknown"]);
+  expect(unknownBg.caps).toEqual(["background"]);
   expect(scoreOf(facts({ leftovers: { kind: "unknown" } }), CONFIG).score).toBe(
     60,
   );
@@ -92,4 +96,26 @@ test("with defaults, a suggestion needs known none leftovers", () => {
   // Best case without the leftover lines stays under the threshold of 70.
   const verdict = scoreOf(facts({ leftovers: { kind: "unknown" } }), CONFIG);
   expect(verdict.score).toBeLessThan(CONFIG.threshold);
+});
+
+const LISTED = { kind: "listed", text: "wait for results" } as const;
+const IGNORING = configOf({ ignoreLeftovers: true });
+
+test("ignored leftovers do not gate, cap or count, and the sum rescales", () => {
+  const verdict = scoreOf(facts({ leftovers: LISTED }), IGNORING);
+  expect(verdict.gate).toBeUndefined();
+  // fill 1×40 + P1 1×20 + cache 1×10 over 70 → 100
+  expect(verdict.score).toBe(100);
+  expect(verdict.parts.map((part) => part.name)).toEqual([
+    "fill",
+    "P1",
+    "cache",
+  ]);
+  const unknown = scoreOf(facts({ leftovers: { kind: "unknown" } }), IGNORING);
+  expect(unknown.score).toBe(100);
+  expect(unknown.caps).toEqual([]);
+});
+
+test("without the setting listed leftovers still gate", () => {
+  expect(scoreOf(facts({ leftovers: LISTED }), CONFIG).score).toBe(0);
 });

@@ -71,6 +71,24 @@
       "description": "Add the preservation template to every /compact and auto-compaction of the main conversation",
       "default": true
     },
+    "ignoreLeftovers": {
+      "type": "boolean",
+      "title": "Ignore leftovers",
+      "description": "Leftovers neither gate nor cap the score nor count in it; for a coordinator session that always waits on others",
+      "default": false
+    },
+    "language": {
+      "type": "string",
+      "title": "Language",
+      "description": "Words of the status line, toasts and explanation: ru or en",
+      "default": "ru"
+    },
+    "alertPercent": {
+      "type": "number",
+      "title": "Alert at context share (%)",
+      "description": "From this share of the window the status line alerts, a toast shows once and /compact is suggested at turn end, whatever the score; 0 turns it off",
+      "default": 60
+    },
     "statusLine": {
       "type": "boolean",
       "title": "Status line",
