@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/apolenkov/agent-compact-advisor/compare/v0.3.0...v0.3.1) (2026-10-06)
+
+
+### Bug Fixes
+
+* **agent-compact-advisor:** count a squash-merged branch as recorded ([#25](https://github.com/apolenkov/agent-compact-advisor/issues/25)) ([7cfe72e](https://github.com/apolenkov/agent-compact-advisor/commit/7cfe72ee00e55fb9f7eac7476431ac6cb998ff4f))
+
 ## [0.3.0](https://github.com/apolenkov/agent-compact-advisor/compare/v0.2.0...v0.3.0) (2026-10-06)
 
 
