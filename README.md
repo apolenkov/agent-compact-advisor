@@ -150,6 +150,8 @@ sessions. See [SECURITY.md](SECURITY.md) for what it reads and sends.
 See [CONTRIBUTING.md](CONTRIBUTING.md) to work on it: `npm ci`, then
 `npm run check`. Questions: [SUPPORT.md](SUPPORT.md).
 
+Live checks run locally: `npm run eval` (headless, on your Claude login; not in CI).
+
 ## License
 
 [MIT](LICENSE). `engine-types/claude-code.d.ts` is © Anthropic PBC and not
