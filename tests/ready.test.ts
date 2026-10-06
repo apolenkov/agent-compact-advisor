@@ -4,7 +4,7 @@ import { expect, mock, test } from "claude-code/testing";
 import type { WatchedCall } from "../types";
 import { advance } from "./fixtures/advance.ts";
 import { DONE, measure, MESSAGES, START, turn } from "./fixtures/session.ts";
-import { world } from "./fixtures/world.ts";
+import { type Repository, world } from "./fixtures/world.ts";
 
 const POLL = "until gh pr view 9 | grep -q MERGED; do sleep 10; done";
 const waiter = (label: string): WatchedCall => ({
@@ -133,3 +133,40 @@ test("git saying nothing never claims that all is recorded", async ($, on) => {
   await advance(clock, 0);
   expect(seen.statuses.at(-1)).not.toContain("всё зафиксировано");
 });
+
+const AHEAD = "рано: коммиты не отправлены: 2 · контекст 400k (40%)";
+
+const branches: readonly (readonly [
+  string,
+  NonNullable<Repository["branch"]>,
+  boolean,
+])[] = [
+  [
+    "upstream gone, content in origin",
+    { upstream: "gone", trunkDiff: "" },
+    true,
+  ],
+  [
+    "upstream gone, not merged",
+    { upstream: "gone", trunkDiff: "a.ts\n" },
+    false,
+  ],
+  ["no upstream ever", { upstream: "none", trunkDiff: "" }, false],
+];
+
+for (const [name, branch, isRecorded] of branches) {
+  test(`a branch: ${name}`, async ($, on) => {
+    const clock = mock.clock(on);
+    const seen = world(on);
+    seen.calls = [];
+    seen.repos["/w"] = { status: [], ahead: 2, branch };
+    await $.session.start(START);
+    await measure($, 400_000);
+    await begin($);
+    await turn($, DONE);
+    await advance(clock, 0);
+    const last = seen.statuses.at(-1) ?? "";
+    expect(last.includes("всё зафиксировано")).toBe(isRecorded);
+    expect(last === AHEAD).toBe(!isRecorded);
+  });
+}
