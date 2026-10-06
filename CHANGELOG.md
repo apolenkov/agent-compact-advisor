@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/apolenkov/agent-compact-advisor/compare/v0.3.1...v0.4.0) (2026-10-06)
+
+
+### Features
+
+* **agent-compact-advisor:** let haiku lower a ready verdict when the answer promises more work ([#27](https://github.com/apolenkov/agent-compact-advisor/issues/27)) ([1a86bfe](https://github.com/apolenkov/agent-compact-advisor/commit/1a86bfe6d41f1084058e5626f438483162f38c7d))
+
 ## [0.3.1](https://github.com/apolenkov/agent-compact-advisor/compare/v0.3.0...v0.3.1) (2026-10-06)
 
 
