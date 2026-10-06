@@ -1,7 +1,7 @@
 /**
  * The compaction score 0–100: gates, a weighted sum, caps, and its words.
  */
-import type { AdvisorFacts, Leftovers, P1 } from "../../types";
+import type { AdvisorFacts, Checked, Leftovers, P1 } from "../../types";
 import type { Config } from "./config.ts";
 
 /** Everything a score is computed from at one moment. */
@@ -44,7 +44,9 @@ export type Gate =
   | Readonly<{ kind: "runner"; count: number }>
   | Readonly<{ kind: "edits"; count: number }>
   | Readonly<{ kind: "unpushed"; count: number }>
-  | Readonly<{ kind: "leftovers"; text: string }>;
+  | Readonly<{ kind: "leftovers"; text: string }>
+  | Readonly<{ kind: "checking" }>
+  | Readonly<{ kind: "owes" }>;
 
 /** What caps the score at 60: something the advisor cannot see. */
 type Cap = "background" | "leftovers";
@@ -83,6 +85,20 @@ const leftoverGates = (facts: AdvisorFacts, config: Config): readonly Gate[] =>
     ? [{ kind: "leftovers", text: facts.leftovers.text }]
     : [];
 
+// The model's check of this turn's answer: only a gate, never a way out of one.
+const checkGates = (facts: AdvisorFacts): readonly Gate[] => {
+  const { promise } = facts;
+  const found: Readonly<Partial<Record<Checked["state"], Gate>>> = {
+    pending: { kind: "checking" },
+    owes: { kind: "owes" },
+  };
+  const gate =
+    promise !== undefined && promise.turnId === facts.turnId
+      ? found[promise.state]
+      : undefined;
+  return gate === undefined ? [] : [gate];
+};
+
 const gateOf = (signals: Signals, config: Config): Gate | undefined => {
   const { facts, runningAgents, liveCalls = 0 } = signals;
   const { staleCalls = 0, unreadRunners = 0 } = signals;
@@ -96,6 +112,7 @@ const gateOf = (signals: Signals, config: Config): Gate | undefined => {
     unreadRunners > 0 && { kind: "runner", count: unreadRunners },
     ...recordGates(signals.unrecorded),
     ...leftoverGates(facts, config),
+    ...checkGates(facts),
   ];
   return gates.find((gate) => gate !== false);
 };

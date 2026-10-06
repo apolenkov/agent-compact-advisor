@@ -30,6 +30,10 @@ export interface World {
    * commits ahead); no entry for a directory means it is no repository.
    */
   repos: Record<string, Repository>;
+  /** What haiku says of an answer: a reply text, "fail", or "hang"; `clean` by default. */
+  model: string;
+  /** The prompts the model was asked, one per call. */
+  asked: string[];
 }
 
 /**
@@ -124,6 +128,8 @@ export const world = (on: On): World => {
     agents: [],
     calls: undefined,
     repos: {},
+    model: "clean",
+    asked: [],
   };
   on("state.get", { plugin: "agent-shell-watch" }, () => ({
     value:
@@ -174,6 +180,21 @@ export const world = (on: On): World => {
         }),
       },
     };
+  });
+  on("model.complete", async (_$, e) => {
+    seen.asked.push(e.prompt);
+    if (seen.model === "hang") {
+      await NEVER;
+    } else if (seen.model === "fail") {
+      throw new Error("blocked model");
+    }
+    const usage = {
+      input_tokens: 1500,
+      output_tokens: 2,
+      cache_read_input_tokens: 0,
+      cache_creation_input_tokens: 0,
+    };
+    return { value: { isAnswered: true as const, text: seen.model, usage } };
   });
   on("session.measure", (_$, e) => ({ changed: e.changed }));
   on("turn.complete", (_$, e) => ({ text: e.answer }));

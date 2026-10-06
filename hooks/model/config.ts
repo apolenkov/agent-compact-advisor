@@ -36,6 +36,8 @@ export interface Config {
   readonly statusLine: boolean;
   /** Leftovers neither gate nor count: for a coordinator that always waits. */
   readonly ignoreLeftovers: boolean;
+  /** Whether the model reads the last answer once the rules say ready. */
+  readonly modelCheck: boolean;
   /** The words of the status line, the toasts and the explanation. */
   readonly language: Language;
   /** The context share (%) from which to alert; 0 turns the alert off. */
@@ -98,6 +100,7 @@ export const configOf = (options: PluginOptions): Config => {
     guardCompactions: options["guardCompactions"] !== false,
     statusLine: options["statusLine"] !== false,
     ignoreLeftovers: options["ignoreLeftovers"] === true,
+    modelCheck: options["modelCheck"] !== false,
     language: options["language"] === "en" ? "en" : "ru",
     alertPercent: alertOf(options["alertPercent"]),
   };

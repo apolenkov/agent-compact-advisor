@@ -17,6 +17,7 @@ test("no options give the defaults, Kev on loopback", () => {
     guardCompactions: true,
     statusLine: true,
     ignoreLeftovers: false,
+    modelCheck: true,
     language: "ru",
     alertPercent: 60,
   });

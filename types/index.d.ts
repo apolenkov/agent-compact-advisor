@@ -24,12 +24,20 @@ export interface AdvisorFacts {
   readonly p1: P1;
   /** The owner's leftover line of the last answer, kept for the compaction template. */
   readonly ownerAsk?: string | undefined;
+  /** The model's check of the last answer; it only ever adds a gate. */
+  readonly promise?: Checked;
   readonly turnId?: string;
   readonly lastTurnAt?: number;
   /** Whether the last score drawn stood at the threshold or above. */
   readonly wasAbove: boolean;
   /** Whether the context share stood at the alert percent or above. */
   readonly wasAlerted: boolean;
+}
+
+/** The model's check of one turn's answer: pending until it answers, `na` when it could not. */
+export interface Checked {
+  readonly turnId: string;
+  readonly state: "pending" | "owes" | "clean" | "na";
 }
 
 /** The slice of an agent-shell-watch call the advisor reads. */

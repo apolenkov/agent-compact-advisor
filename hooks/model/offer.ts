@@ -17,7 +17,9 @@ export interface Offer {
 
 // Work still running: the alert shows, but no ready /compact to Tab into.
 const isBusy = (gate: Verdict["gate"]): boolean =>
-  gate?.kind === "agents" || gate?.kind === "calls";
+  gate?.kind === "agents" ||
+  gate?.kind === "calls" ||
+  gate?.kind === "checking";
 
 /**
  * Decides a redraw's offers. The `/compact` is offered at a turn's end, or
