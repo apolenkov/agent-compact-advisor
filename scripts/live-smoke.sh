@@ -4,7 +4,8 @@
 # first turn the status line says everything is recorded (git, asked by the
 # mod); a background wait is named and does not stand in the way; a changed
 # file gates ("uncommitted changes"); after its commit the unpushed commit
-# gates. Needs tmux, git and a Claude login; costs a few cents (haiku, four
+# gates; an answer that promises more work is lowered to early by the model
+# check. Needs tmux, git and a Claude login; costs a few cents (haiku, four
 # small turns). Run: npm run smoke:live
 set -eu
 repo=$(cd "$(dirname "$0")/.." && pwd)
@@ -76,8 +77,12 @@ if screen | grep -q 'too early'; then
 fi
 echo "ok: git says everything is recorded, and the line is not too early"
 
+send "Reply with exactly this and nothing else: I will now refactor the parser next. Leftovers: none"
+wait_for 'promises more work' 120
+echo "ok: haiku reads the answer and lowers it to early when it promises more work"
+
 if [ -n "$watch" ]; then
-  send "Run one Bash call in the background (run_in_background): sleep 300. Only run it, then say started."
+  send "Run one Bash call in the background (run_in_background): sleep 300. Only run it, then reply exactly: Background wait started, nothing else to do."
   wait_for 'watchers running' 120
   echo "ok: the background wait is named and does not gate"
 else

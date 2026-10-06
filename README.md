@@ -157,27 +157,33 @@ Set in `/config`.
 <details>
 <summary><b>All settings</b></summary>
 
-| Setting            | Default                                     |                                                                    |
-| ------------------ | ------------------------------------------- | ------------------------------------------------------------------ |
-| `threshold`        | 70                                          | score from which the `/compact` is suggested                       |
-| `minTokens`        | 100000                                      | below it the score is 0                                            |
-| `fullTokens`       | 300000                                      | context at which the fill part is complete                         |
-| `cacheTtlMin`      | 5                                           | minutes the prompt cache counts as warm (60 with the 1-hour cache) |
-| `systemOneUrl`     | `http://127.0.0.1:8010`                     | Kev for P1; loopback only, empty turns it off                      |
-| `kevModel`         | `kev-latest`                                | System One model                                                   |
-| `leftoverPrefixes` | `Хвосты для агента:\|Хвосты для владельца:` | `\|`-separated                                                     |
-| `noneWords`        | `нет\|none`                                 | `\|`-separated                                                     |
-| `guardCompactions` | true                                        | add the template to every compaction                               |
-| `statusLine`       | true                                        | show the score                                                     |
-| `ignoreLeftovers`  | false                                       | leftovers neither gate, cap nor count (coordinator sessions)       |
-| `language`         | `ru`                                        | words of the status line, toasts and explanation: `ru` or `en`     |
-| `alertPercent`     | 60                                          | context share (%) that alerts regardless of score; 0 turns it off  |
+| Setting            | Default                                     |                                                                                  |
+| ------------------ | ------------------------------------------- | -------------------------------------------------------------------------------- |
+| `threshold`        | 70                                          | score from which the `/compact` is suggested                                     |
+| `minTokens`        | 100000                                      | below it the score is 0                                                          |
+| `fullTokens`       | 300000                                      | context at which the fill part is complete                                       |
+| `cacheTtlMin`      | 5                                           | minutes the prompt cache counts as warm (60 with the 1-hour cache)               |
+| `systemOneUrl`     | `http://127.0.0.1:8010`                     | Kev for P1; loopback only, empty turns it off                                    |
+| `kevModel`         | `kev-latest`                                | System One model                                                                 |
+| `leftoverPrefixes` | `Хвосты для агента:\|Хвосты для владельца:` | `\|`-separated                                                                   |
+| `noneWords`        | `нет\|none`                                 | `\|`-separated                                                                   |
+| `guardCompactions` | true                                        | add the template to every compaction                                             |
+| `statusLine`       | true                                        | show the score                                                                   |
+| `ignoreLeftovers`  | false                                       | leftovers neither gate, cap nor count (coordinator sessions)                     |
+| `modelCheck`       | true                                        | haiku reads the last answer when the rules say ready; it can only lower to early |
+| `language`         | `ru`                                        | words of the status line, toasts and explanation: `ru` or `en`                   |
+| `alertPercent`     | 60                                          | context share (%) that alerts regardless of score; 0 turns it off                |
 
 </details>
 
 ## Privacy
 
-One network call, on loopback only: P1 posts the last answer's final 8000
+The model check sends the last answer's final 6000 characters to haiku through
+your own Claude Code session (its subscription and client; no key, no other
+party), only on a turn whose answer the rules do not already hold back, and a
+failure or an unclear reply leaves the rules' verdict as it is. The model can
+only add the gate "the answer promises more work", never lift one. Besides
+it, one network call, on loopback only: P1 posts the last answer's final 8000
 characters to `systemOneUrl`. No key, no telemetry, nothing stored across
 sessions. See [SECURITY.md](SECURITY.md) for what it reads and sends.
 

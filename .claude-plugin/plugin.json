@@ -77,6 +77,12 @@
       "description": "Leftovers neither gate nor cap the score nor count in it; for a coordinator session that always waits on others",
       "default": false
     },
+    "modelCheck": {
+      "type": "boolean",
+      "title": "Model check of the answer",
+      "description": "When the rules say ready, haiku (your Claude Code subscription) reads the last answer's end and can only lower the verdict to early if the answer promises more work",
+      "default": true
+    },
     "language": {
       "type": "string",
       "title": "Language",

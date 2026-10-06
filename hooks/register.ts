@@ -12,16 +12,25 @@ import type {
 } from "claude-code";
 import { atom, read, update } from "claude-code";
 
-import type { AdvisorFacts, Recorded } from "../types";
+import type { AdvisorFacts, Checked, Recorded } from "../types";
 import { type Calls, callsOf } from "./model/calls.ts";
 import { type Config, configOf } from "./model/config.ts";
 import { drawnFrom } from "./model/drawn.ts";
 import { type Drawn, explanationOf, statusLineOf } from "./model/format.ts";
 import { kevBodyOf, noulOf } from "./model/kev.ts";
-import { leftoversOf, ownerAskOf } from "./model/leftovers.ts";
 import { offerOf } from "./model/offer.ts";
+import { isAsked, isCheckable, labelOf, requestOf } from "./model/promise.ts";
+import {
+  carryOf,
+  checked,
+  isGuarded,
+  offered,
+  p1Settled,
+  restarted,
+  turned,
+} from "./model/steps.ts";
 import { SUGGESTION, withTemplate } from "./model/template.ts";
-import { quietly } from "./quietly.ts";
+import { orElse, quietly } from "./quietly.ts";
 import { recordHooks } from "./record.ts";
 
 type Engine = Readonly<EngineInterface>;
@@ -63,44 +72,53 @@ const askKev = async (
   config: Config,
   answer: string,
 ): Promise<number | undefined> => {
-  if (config.kevUrl === undefined) {
+  const { kevUrl } = config;
+  if (kevUrl === undefined) {
     return undefined;
   }
-  try {
-    const response = await Promise.race([
-      $.http.fetch(`${config.kevUrl}/v1/systemone`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: kevBodyOf(config.kevModel, answer),
-      }),
-      timedOut($),
-    ]);
-    return response?.ok === true
-      ? noulOf(JSON.parse(response.text) as unknown)
-      : undefined;
-  } catch {
-    return undefined;
-  }
+  const fetched = async (): Promise<number | undefined> => {
+    const response = await $.http.fetch(`${kevUrl}/v1/systemone`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: kevBodyOf(config.kevModel, answer),
+    });
+    return response.ok ? noulOf(JSON.parse(response.text)) : undefined;
+  };
+  return orElse(Promise.race([fetched(), timedOut($)]), undefined);
+};
+
+// The model's label for the answer: "na" for a failure, a timeout, a reply
+// that is not exactly a label, or a model that cannot be reached.
+const askModel = async (
+  $: Engine,
+  answer: string,
+): Promise<Checked["state"]> => {
+  const reply = await orElse($.model.complete(requestOf(answer)), undefined);
+  return reply?.isAnswered === true ? (labelOf(reply.text) ?? "na") : "na";
+};
+
+const settleCheck = async (
+  $: Engine,
+  config: Config,
+  turn: Readonly<{ id: string; answer: string }>,
+): Promise<void> => {
+  await draw($, config, true);
+  const state = await askModel($, turn.answer);
+  await update($, factsAtom, (facts) => checked(facts, turn.id, state));
 };
 
 // agent-shell-watch writes its calls at every session start: a value never
 // written means it is not installed, so background work is unknown.
 const callsStateOf = async ($: Engine): Promise<Calls | undefined> => {
-  try {
-    const { value, version } = await $.state.get(watchCalls);
-    return version === 0 || value === undefined ? undefined : callsOf(value);
-  } catch {
-    return undefined;
-  }
+  const held = await orElse($.state.get(watchCalls), undefined);
+  return held === undefined || held.version === 0 || held.value === undefined
+    ? undefined
+    : callsOf(held.value);
 };
 
 const runningAgentsOf = async ($: Engine): Promise<number> => {
-  try {
-    const agents = await $.agent.list();
-    return agents.filter((agent) => agent.status === "running").length;
-  } catch {
-    return 0;
-  }
+  const agents = await orElse($.agent.list(), []);
+  return agents.filter((agent) => agent.status === "running").length;
 };
 
 const drawnOf = async ($: Engine, config: Config): Promise<Drawn> => {
@@ -132,11 +150,7 @@ const draw = async (
     $.ui.toast(offer.toast);
   }
   if (offer.isChanged) {
-    await update($, factsAtom, (facts): AdvisorFacts => ({
-      ...facts,
-      wasAbove: offer.isAbove,
-      wasAlerted: offer.isAlerted,
-    }));
+    await update($, factsAtom, (facts) => offered(facts, offer));
   }
 };
 
@@ -147,14 +161,7 @@ const settleP1 = async (
 ): Promise<void> => {
   await draw($, config, true);
   const value = await askKev($, config, turn.answer);
-  await update($, factsAtom, (facts): AdvisorFacts =>
-    facts.turnId === turn.id
-      ? {
-          ...facts,
-          p1: value === undefined ? { kind: "na" } : { kind: "value", value },
-        }
-      : facts,
-  );
+  await update($, factsAtom, (facts) => p1Settled(facts, turn.id, value));
   await draw($, config, true);
 };
 
@@ -163,19 +170,12 @@ const onCompact = async (
   config: Config,
   e: Readonly<SessionCompactInput>,
 ): Promise<SessionCompactInput> => {
-  const isGuarded =
-    config.guardCompactions &&
-    e.agentId === undefined &&
-    (e.trigger === "manual" || e.trigger === "auto");
-  const facts = await read($, factsAtom);
-  const calls = await callsStateOf($);
-  const recorded = await read($, recordedAtom);
-  const carry = {
-    ownerAsk: facts.ownerAsk,
-    waiters: calls?.waiters ?? [],
-    touched: recorded.touched,
-  };
-  return isGuarded
+  const carry = carryOf(
+    await read($, factsAtom),
+    await callsStateOf($),
+    await read($, recordedAtom),
+  );
+  return isGuarded(config, e)
     ? { ...e, instructions: withTemplate(e.instructions, carry) }
     : e;
 };
@@ -188,9 +188,7 @@ const start = async ($: Engine, config: Config): Promise<void> => {
     description: "Explain the current /compact score and its signals",
     immediate: true,
   });
-  await update($, factsAtom, (facts): AdvisorFacts =>
-    facts.p1.kind === "pending" ? { ...facts, p1: { kind: "na" } } : facts,
-  );
+  await update($, factsAtom, restarted);
   $.clock.every(REDRAW_MS, () => {
     void quietly(draw($, config, false));
   });
@@ -204,8 +202,24 @@ const noteSize = async (
   config: Config,
   size: Pick<AdvisorFacts, "percent" | "tokens" | "window">,
 ): Promise<void> => {
-  await update($, factsAtom, (facts): AdvisorFacts => ({ ...facts, ...size }));
+  await update($, factsAtom, (facts) => ({ ...facts, ...size }));
   await draw($, config, false);
+};
+
+// The model reads only an answer the rules already call ready: it can add a
+// gate, never lift one. Pending holds the "can" until it answers.
+const shouldCheck = async (
+  $: Engine,
+  config: Config,
+  e: Readonly<TurnCompleteInput>,
+): Promise<boolean> => {
+  const drawn = await drawnOf($, config);
+  const isReady =
+    isCheckable(config, e.reason, e.answer) && isAsked(drawn.verdict.gate);
+  if (isReady) {
+    await update($, factsAtom, (facts) => checked(facts, e.turnId, "pending"));
+  }
+  return isReady;
 };
 
 const noteTurn = async (
@@ -213,27 +227,23 @@ const noteTurn = async (
   config: Config,
   e: Readonly<TurnCompleteInput>,
 ): Promise<void> => {
-  const leftovers = leftoversOf(e.answer, config.leftovers);
-  const isAsked =
-    config.kevUrl !== undefined &&
-    e.reason === "answer" &&
-    (config.ignoreLeftovers || leftovers.kind !== "listed");
   const now = await $.clock.now();
-  await update($, factsAtom, (facts): AdvisorFacts => ({
-    ...facts,
-    leftovers,
-    ownerAsk: ownerAskOf(e.answer, config.leftovers),
-    p1: { kind: isAsked ? "pending" : "na" },
-    turnId: e.turnId,
-    lastTurnAt: now,
-  }));
+  await update($, factsAtom, turned(config, e, now));
+  const held = await read($, factsAtom);
+  const isKevAsked = held.p1.kind === "pending";
+  const isChecked = await shouldCheck($, config, e);
   // Out of the turn's dispatch: the answer shows at once, and the box is
   // free by the time a suggestion comes.
   $.clock.after(0, () => {
     void quietly(
-      isAsked
-        ? settleP1($, config, { id: e.turnId, answer: e.answer })
-        : draw($, config, true),
+      (async (): Promise<void> => {
+        if (isChecked) {
+          await settleCheck($, config, { id: e.turnId, answer: e.answer });
+        }
+        await (isKevAsked
+          ? settleP1($, config, { id: e.turnId, answer: e.answer })
+          : draw($, config, true));
+      })(),
     );
   });
 };
