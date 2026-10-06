@@ -326,11 +326,19 @@ def main():
     rows = []
     for f in glob.glob(os.path.join(ROOT, "*", "*.jsonl")):
         try:
-            recs = [
-                d
-                for line in open(f)
-                if isinstance((d := json.loads(line)), dict)
-            ]
+            # A blank or half-written line must cost that line, not the whole
+            # file: journals end with a newline and an interrupted write can
+            # leave a partial record behind.
+            recs = []
+            for line in open(f):
+                if not line.strip():
+                    continue
+                try:
+                    d = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(d, dict):
+                    recs.append(d)
             rows += analyze(recs)
         except Exception as e:
             print("ERR", f, e, file=sys.stderr)
