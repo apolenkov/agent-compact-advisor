@@ -197,6 +197,15 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) to work on it: `npm ci`, then
 
 Live checks run locally: `npm run eval` (headless, on your Claude login; not in CI).
 
+`scripts/corpus.py` rebuilds the calibration corpus from the local
+`~/.claude/projects` journals: for every compaction boundary, the state it
+was taken at (size, leftover lines, git, live background) and what the owner
+said or redid after it. The October corpus (63 boundaries, 53 observable, 4
+loss incidents) found every loss at a state the gates already hold — a listed
+agent leftover, a live background call, an unpushed commit — while context
+size and uncommitted edits predicted nothing. That is why the gates, not the
+weighted sum, carry the verdict.
+
 ## License
 
 [MIT](LICENSE). `engine-types/claude-code.d.ts` is © Anthropic PBC and not

@@ -5,8 +5,9 @@ import { scoreOf, type Signals } from "../hooks/model/score.ts";
 import type { Leftovers } from "../types";
 import { SLICES } from "./fixtures/slices.ts";
 
-// 56 moments of 9 real sessions, reduced to kinds of events (no text, no paths:
-// the sessions hold other projects), labelled blind by two labellers. A
+// 56 moments of 9 real sessions plus 6 corpus rows (`C-`), reduced to kinds
+// of events (no text, no paths: the sessions hold other projects), labelled
+// blind by two labellers. A
 // disagreement is resolved by the coordinator's rule for the 12 reports of the
 // weeklyreport session ("can": an owner question is carried by the template)
 // and otherwise by the cost model ("early": a false "can" costs more).
@@ -84,7 +85,11 @@ const verdictOf = (slice: Slice): "can" | "early" => {
       wasAlerted: false,
     },
     runningAgents: 0,
-    liveCalls: slice.live.filter((kind) => kind !== "waiter").length,
+    liveCalls: slice.live.filter(
+      (kind) => kind === "work" || kind === "unknown",
+    ).length,
+    unreadRunners: slice.live.filter((kind) => kind === "unread").length,
+    staleCalls: slice.live.filter((kind) => kind === "stale").length,
     unrecorded: { files: slice.edited ? 1 : 0, commits: slice.unpushed },
     now: 0,
   };
@@ -119,5 +124,5 @@ test("the false early are known: with no git state in the slices, an edit counts
   // The 12 reports were written after edits the labellers saw recorded; the
   // real advisor asks git, the slices cannot.
   expect(missed.length).toBeLessThanOrEqual(slices.length);
-  expect(slices).toHaveLength(56);
+  expect(slices).toHaveLength(62);
 });
