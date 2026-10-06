@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/apolenkov/agent-compact-advisor/compare/v0.2.0...v0.3.0) (2026-10-06)
+
+
+### Features
+
+* **agent-compact-advisor:** judge readiness from the session history ([#22](https://github.com/apolenkov/agent-compact-advisor/issues/22)) ([42bc3a8](https://github.com/apolenkov/agent-compact-advisor/commit/42bc3a8c4488850c4636f953151e7d95448f02b2))
+
 ## [0.2.0](https://github.com/apolenkov/agent-compact-advisor/compare/v0.1.0...v0.2.0) (2026-10-05)
 
 
