@@ -1,10 +1,14 @@
 /**
- * Fixtures of slices.test.ts: 56 moments of real sessions as kinds of events
+ * Fixtures of slices.test.ts: 56 moments of real sessions plus 6 corpus
+ * loss-incident signatures (`C-` ids) as kinds of events
  * only (no text, no paths: the sessions hold other projects). One per line:
  * id | edited since the last commit | commits unpushed | live background
  * classes | agent leftovers | owner leftovers | label A | label B | resolved
  * label | how it was resolved.
  */
+// Rows with a `C-` id are the four loss incidents of the October corpus
+// (scripts/corpus.py), kept at event-kind level; `unread` is a runner that
+// ended with its verdict unread, `stale` is a live call that went silent.
 export const SLICES = `
 S1-3|1|0|unknown,waiter|unknown|unknown|early|early|early|both
 S1-607|1|0|waiter,unknown,unknown,unknown,waiter,waiter,waiter,waiter,work,work|listed|none|early|early|early|both
@@ -62,4 +66,10 @@ S4-256|1|0||none|none|early|early|early|both
 S4-257|1|0||none|none|early|early|early|both
 S7-3|0|2|unknown|none|none|early|early|early|both
 S8-0|0|0||none|none|can|can|can|both
+C-1|0|0|work|listed|unknown|early|early|early|both
+C-2|0|4|work|listed|unknown|early|early|early|both
+C-3|0|2|work|listed|unknown|early|early|early|both
+C-4|0|0||listed|unknown|early|early|early|both
+C-5|0|0|unread|unknown|unknown|early|early|early|both
+C-6|0|0|stale|unknown|unknown|early|early|early|both
 `;
