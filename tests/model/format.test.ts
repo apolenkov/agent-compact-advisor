@@ -32,6 +32,8 @@ const drawn = (over: Partial<Drawn> = {}): Drawn => ({
   facts: FACTS,
   isCacheWarm: true,
   isBackgroundKnown: true,
+  isRecordKnown: false,
+  watchers: 0,
   config: RU,
   ...over,
 });

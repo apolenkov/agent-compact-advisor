@@ -8,9 +8,23 @@ import type { Config } from "./config.ts";
 export interface Signals {
   readonly facts: AdvisorFacts;
   readonly runningAgents: number;
-  /** Live background calls, undefined when agent-shell-watch says nothing. */
+  /** Live background work (not waiters), undefined when agent-shell-watch says nothing. */
   readonly liveCalls: number | undefined;
+  /** Background work that went silent: to kill, not to wait for. */
+  readonly staleCalls?: number;
+  /** Runners that ended in the background with their verdict unread. */
+  readonly unreadRunners?: number;
+  /** Work the session did and nothing has recorded yet, read from git. */
+  readonly unrecorded?: Unrecorded;
   readonly now: number;
+}
+
+/** Changes in the repositories the session touched that no commit or push holds. */
+export interface Unrecorded {
+  /** Files changed, not committed. */
+  readonly files: number;
+  /** Commits made, not pushed. */
+  readonly commits: number;
 }
 
 /** One weighted part of the score, its value 0..1. */
@@ -26,6 +40,10 @@ export type Gate =
   | Readonly<{ kind: "small"; tokens: number }>
   | Readonly<{ kind: "agents"; count: number }>
   | Readonly<{ kind: "calls"; count: number }>
+  | Readonly<{ kind: "stale"; count: number }>
+  | Readonly<{ kind: "runner"; count: number }>
+  | Readonly<{ kind: "edits"; count: number }>
+  | Readonly<{ kind: "unpushed"; count: number }>
   | Readonly<{ kind: "leftovers"; text: string }>;
 
 /** What caps the score at 60: something the advisor cannot see. */
@@ -47,19 +65,37 @@ const UNKNOWN_CAP = 60;
 const FULL_SHARE = 0.9;
 const WEIGHTS = { fill: 40, leftovers: 30, p1: 20, cache: 10 } as const;
 
+// What no commit or push holds in the repositories the session touched.
+const recordGates = (unrecorded: Unrecorded | undefined): readonly Gate[] => [
+  ...((unrecorded?.files ?? 0) > 0
+    ? [{ kind: "edits" as const, count: unrecorded?.files ?? 0 }]
+    : []),
+  ...((unrecorded?.commits ?? 0) > 0
+    ? [{ kind: "unpushed" as const, count: unrecorded?.commits ?? 0 }]
+    : []),
+];
+
+// The agent's own leftovers gate; an owner's question is carried, not held.
+const leftoverGates = (facts: AdvisorFacts, config: Config): readonly Gate[] =>
+  !config.ignoreLeftovers &&
+  facts.leftovers.kind === "listed" &&
+  facts.leftovers.isOwner !== true
+    ? [{ kind: "leftovers", text: facts.leftovers.text }]
+    : [];
+
 const gateOf = (signals: Signals, config: Config): Gate | undefined => {
   const { facts, runningAgents, liveCalls = 0 } = signals;
+  const { staleCalls = 0, unreadRunners = 0 } = signals;
   const { tokens = 0 } = facts;
   const gates: readonly (Gate | false)[] = [
     facts.tokens === undefined && { kind: "unread" },
     tokens < config.minTokens && { kind: "small", tokens },
     runningAgents > 0 && { kind: "agents", count: runningAgents },
     liveCalls > 0 && { kind: "calls", count: liveCalls },
-    !config.ignoreLeftovers &&
-      facts.leftovers.kind === "listed" && {
-        kind: "leftovers",
-        text: facts.leftovers.text,
-      },
+    staleCalls > 0 && { kind: "stale", count: staleCalls },
+    unreadRunners > 0 && { kind: "runner", count: unreadRunners },
+    ...recordGates(signals.unrecorded),
+    ...leftoverGates(facts, config),
   ];
   return gates.find((gate) => gate !== false);
 };
@@ -104,7 +140,12 @@ const leftoversPart = (
         {
           name: "leftovers",
           weight: WEIGHTS.leftovers,
-          value: leftovers.kind === "none" ? 1 : 0,
+          // An owner's question is no unfinished work: a compaction carries it.
+          value:
+            leftovers.kind === "none" ||
+            (leftovers.kind === "listed" && leftovers.isOwner === true)
+              ? 1
+              : 0,
         },
       ];
 

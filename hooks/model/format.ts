@@ -16,12 +16,15 @@ export interface Drawn {
   readonly facts: AdvisorFacts;
   readonly isCacheWarm: boolean;
   readonly isBackgroundKnown: boolean;
+  /** Whether git said anything of the touched repositories. */
+  readonly isRecordKnown: boolean;
+  /** Live background waiters: polls that lose nothing to a compaction. */
+  readonly watchers: number;
   readonly config: Config;
 }
 
 const gateWords = (language: Config["language"], gate: Gate): string => {
-  const count =
-    gate.kind === "agents" || gate.kind === "calls" ? gate.count : 0;
+  const count = "count" in gate ? gate.count : 0;
   const form = formOf(language, count);
   const phrases: Readonly<Record<Gate["kind"], string>> = {
     unread: say(language, "unread"),
@@ -32,6 +35,10 @@ const gateWords = (language: Config["language"], gate: Gate): string => {
     calls: say(language, count === 1 ? "callsSingle" : `calls${form}`, {
       n: count,
     }),
+    stale: say(language, "stale", { n: count }),
+    runner: say(language, "runner", { n: count }),
+    edits: say(language, "edits", { n: count }),
+    unpushed: say(language, "unpushed", { n: count }),
     leftovers: say(language, "leftovers", {
       text: gate.kind === "leftovers" ? gate.text : "",
     }),
@@ -61,6 +68,25 @@ const leftoversOf = (
   return kind === "listed" || drawn.config.ignoreLeftovers
     ? []
     : [say(language, phrase)];
+};
+
+// What a compaction can carry and what does not stand in its way.
+const carriedOf = (
+  language: Config["language"],
+  drawn: Drawn,
+): readonly string[] => {
+  const { leftovers, ownerAsk } = drawn.facts;
+  return [
+    ...(drawn.isRecordKnown ? [say(language, "allRecorded")] : []),
+    ...(ownerAsk !== undefined &&
+    leftovers.kind === "listed" &&
+    leftovers.isOwner === true
+      ? [say(language, "ownerAsk", { text: leftovers.text })]
+      : []),
+    ...(drawn.watchers > 0
+      ? [say(language, "watchers", { n: drawn.watchers })]
+      : []),
+  ];
 };
 
 const goalOf = (
@@ -114,6 +140,7 @@ const headOf = (drawn: Drawn): readonly string[] => {
     ? [
         `${lead}: ${say(language, "score", { n: verdict.score })}`,
         ...sizeOf(language, facts),
+        ...carriedOf(language, drawn),
         ...leftoversOf(language, drawn),
         ...goalOf(language, facts),
         say(language, drawn.isCacheWarm ? "cacheWarm" : "cacheCold"),

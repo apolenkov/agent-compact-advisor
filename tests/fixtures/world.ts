@@ -1,4 +1,4 @@
-import type { AgentInfo, On } from "claude-code";
+import type { AgentInfo, On, ProcessRunResult } from "claude-code";
 
 // A promise that never settles: Boolean is a non-empty executor that ignores it.
 const NEVER = new Promise<never>(Boolean);
@@ -16,8 +16,46 @@ export interface World {
   kev: number | "hang" | undefined;
   agents: AgentInfo[];
   /** agent-shell-watch's calls, undefined when it is not installed. */
-  calls: { status: string }[] | undefined;
+  calls:
+    | {
+        status: string;
+        command?: string;
+        label?: string;
+        runner?: string;
+        needsTail?: boolean;
+      }[]
+    | undefined;
+  /**
+   * What git says per repository root (its `status --porcelain` lines and the
+   * commits ahead); no entry for a directory means it is no repository.
+   */
+  repos: Record<string, { status: string[]; ahead: number }>;
 }
+
+const done = (exitCode: number, stdout: string): ProcessRunResult => ({
+  exitCode,
+  stdout,
+  stderr: exitCode === 0 ? "" : "not a git repository",
+  isStdoutTruncated: false,
+  isStderrTruncated: false,
+});
+
+// What git prints for the three questions the advisor asks.
+const processAnswer = (
+  root = "",
+  repository: { status: string[]; ahead: number } | undefined,
+  verb = "",
+): { value: ProcessRunResult } => {
+  const answers: Readonly<Record<string, string>> = {
+    "rev-parse": `${root}\n`,
+    status: (repository?.status ?? []).map((line) => `${line}\n`).join(""),
+    "rev-list": `${String(repository?.ahead ?? 0)}\n`,
+  };
+  return {
+    value:
+      repository === undefined ? done(128, "") : done(0, answers[verb] ?? ""),
+  };
+};
 
 /**
  * Answers every engine call agent-compact-advisor makes besides the clock.
@@ -34,6 +72,7 @@ export const world = (on: On): World => {
     kev: 0.9,
     agents: [],
     calls: undefined,
+    repos: {},
   };
   on("state.get", { plugin: "agent-shell-watch" }, () => ({
     value:
@@ -42,6 +81,17 @@ export const world = (on: On): World => {
         : { value: seen.calls, version: 1 },
   }));
   on("session.start", (_$, e) => ({ cwd: e.cwd }));
+  on("session.root", () => ({ value: "/w" }));
+  on("turn.start", (_$, e) => ({ turnId: e.turnId }));
+  on("tool.call", () => ({ result: {}, text: "ok" }));
+  on("process.run", (_$, e) => {
+    const cwd = e.init?.cwd ?? "/w";
+    const root = Object.keys(seen.repos).find(
+      (one) => cwd === one || cwd.startsWith(`${one}/`),
+    );
+    const repository = root === undefined ? undefined : seen.repos[root];
+    return processAnswer(root, repository, e.argv[1]);
+  });
   on("command.register", (_$, e) => ({ value: { command: e.name } }));
   on("ui.status", (_$, e) => {
     seen.statuses.push(e.text);

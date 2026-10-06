@@ -39,11 +39,15 @@ seconds).
 It runs on your own Claude login, locally; CI does not run it.
 
 It cannot see the status line (a headless session draws none).
-`npm run smoke:live` does: it starts a real interactive session in tmux, sends
-one small turn, captures the screen and checks that the status line carries the
-advisor's verdict (`too early: context is small`). It needs tmux and a Claude
-login, takes about 10 s for a cent, and is local only (no tmux session with a
-login in CI).
+`npm run smoke:live` does: it starts a real interactive session in tmux over a
+throwaway git repository and checks the captured screen as the repository
+changes: after a small turn the line says everything is recorded (git, asked by
+the mod); a background wait is named and does not gate (this step needs
+agent-shell-watch: `SHELL_WATCH_DIR`, else the newest installed copy, else it is
+skipped and says so); a changed file gates ("uncommitted changes"); after its
+commit the unpushed commit gates. It needs tmux, git and a Claude login, takes
+about two minutes for a few cents (haiku), and is local only (no tmux session
+with a login in CI).
 
 ## Dependency holds
 

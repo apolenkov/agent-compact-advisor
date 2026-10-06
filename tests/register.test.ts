@@ -63,7 +63,21 @@ test("without agent-shell-watch and with Kev down the score stays capped", async
   expect(seen.suggested).toEqual([]);
 });
 
-test("listed leftovers are a gate and Kev is not asked", async ($, on) => {
+test("the agent's own listed leftovers are a gate and Kev is not asked", async ($, on) => {
+  const clock = mock.clock(on);
+  const seen = world(on);
+  seen.calls = [];
+  await $.session.start(START);
+  await measure($, 400_000);
+  await turn($, "Хвосты для агента: слить PR\nХвосты для владельца: нет");
+  await advance(clock, 0);
+  expect(seen.statuses.at(-1)).toBe(
+    "рано: хвосты — слить PR · контекст 400k (40%)",
+  );
+  expect(seen.posts).toEqual([]);
+});
+
+test("a question to the owner is no gate: the compaction carries it", async ($, on) => {
   const clock = mock.clock(on);
   const seen = world(on);
   seen.calls = [];
@@ -71,10 +85,15 @@ test("listed leftovers are a gate and Kev is not asked", async ($, on) => {
   await measure($, 400_000);
   await turn($, "Хвосты для агента: нет\nХвосты для владельца: push");
   await advance(clock, 0);
-  expect(seen.statuses.at(-1)).toBe(
-    "рано: хвосты — push · контекст 400k (40%)",
+  expect(seen.statuses.at(-1)).toContain("вопрос владельцу: push");
+  expect(seen.statuses.at(-1)).not.toContain("рано");
+  await $.session.compact({
+    trigger: "manual",
+    messages: MESSAGES,
+  });
+  expect(seen.compactions.at(-1)).toContain(
+    "Open questions to the owner, verbatim from the last answer: push",
   );
-  expect(seen.posts).toEqual([]);
 });
 
 test("the cache going cold redraws without its part", async ($, on) => {
