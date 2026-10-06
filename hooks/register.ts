@@ -13,7 +13,7 @@ import type {
 import { atom, read, update } from "claude-code";
 
 import type { AdvisorFacts, Checked, Recorded } from "../types";
-import { type Calls, callsOf } from "./model/calls.ts";
+import { type Calls, heldCallsOf } from "./model/calls.ts";
 import { type Config, configOf } from "./model/config.ts";
 import { drawnFrom } from "./model/drawn.ts";
 import { type Drawn, explanationOf, statusLineOf } from "./model/format.ts";
@@ -102,7 +102,7 @@ const settleCheck = async (
   config: Config,
   turn: Readonly<{ id: string; answer: string }>,
 ): Promise<void> => {
-  await draw($, config, true);
+  await quietly(draw($, config, true));
   const state = await askModel($, turn.answer);
   await update($, factsAtom, (facts) => checked(facts, turn.id, state));
 };
@@ -110,10 +110,10 @@ const settleCheck = async (
 // agent-shell-watch writes its calls at every session start: a value never
 // written means it is not installed, so background work is unknown.
 const callsStateOf = async ($: Engine): Promise<Calls | undefined> => {
-  const held = await orElse($.state.get(watchCalls), undefined);
-  return held === undefined || held.version === 0 || held.value === undefined
-    ? undefined
-    : callsOf(held.value);
+  return orElse(
+    (async () => heldCallsOf(await $.state.get(watchCalls)))(),
+    undefined,
+  );
 };
 
 const runningAgentsOf = async ($: Engine): Promise<number> => {
@@ -231,14 +231,17 @@ const noteTurn = async (
   await update($, factsAtom, turned(config, e, now));
   const held = await read($, factsAtom);
   const isKevAsked = held.p1.kind === "pending";
-  const isChecked = await shouldCheck($, config, e);
-  // Out of the turn's dispatch: the answer shows at once, and the box is
-  // free by the time a suggestion comes.
+  // A failure of the optional check leaves the rules' verdict, never the turn.
+  const isChecked = await orElse(shouldCheck($, config, e), false);
+  // The render and the settling run out of the turn's dispatch: the answer
+  // shows at once, and the box is free by the time a suggestion comes.
   $.clock.after(0, () => {
     void quietly(
       (async (): Promise<void> => {
         if (isChecked) {
-          await settleCheck($, config, { id: e.turnId, answer: e.answer });
+          await quietly(
+            settleCheck($, config, { id: e.turnId, answer: e.answer }),
+          );
         }
         await (isKevAsked
           ? settleP1($, config, { id: e.turnId, answer: e.answer })

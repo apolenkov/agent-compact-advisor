@@ -83,9 +83,9 @@ const promptOf = (answer: string): string =>
 /**
  * The label in a reply.
  * @param reply the model's text
- * @returns the label when the reply is exactly one, else undefined
+ * @returns the label the reply starts with (`owes!`, `Clean.`), else undefined
  */
 export const labelOf = (reply: string): Debt | undefined => {
-  const word = reply.trim().toLowerCase().replaceAll(/[`.]/gu, "");
+  const word = /[a-z]+/u.exec(reply.toLowerCase())?.[0];
   return word === "owes" || word === "clean" ? word : undefined;
 };

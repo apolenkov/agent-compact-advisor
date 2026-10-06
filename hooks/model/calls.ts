@@ -151,3 +151,20 @@ export const callsOf = (calls: readonly WatchedCall[]): Calls => {
       .map((one) => purposeOf(one.call)),
   };
 };
+
+/**
+ * The calls from what the watcher's state holds.
+ * @param held the state read: its value and version
+ * @param held.value the call list, as the watcher wrote it
+ * @param held.version 0 when the watcher never wrote it
+ * @returns the classed calls, undefined when it is not installed
+ */
+export const heldCallsOf = (
+  held: Readonly<{
+    value: readonly WatchedCall[] | undefined;
+    version: number;
+  }>,
+): Calls | undefined =>
+  held.version === 0 || held.value === undefined
+    ? undefined
+    : callsOf(held.value);
