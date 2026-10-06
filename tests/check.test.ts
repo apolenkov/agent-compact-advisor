@@ -128,3 +128,24 @@ test(
     expect(seen.statuses.at(-1)).toContain(READY);
   },
 );
+
+// TASK-334's half: a promise buried in plain prose, not in any tail marker.
+// The fixture can't judge text, so the stub answers "owes"; what this pins
+// down is that the prose tail actually reaches the model and its "owes"
+// gates.
+test("a promise in Russian prose reaches the model and holds", async ($, on) => {
+  const clock = mock.clock(on);
+  const seen = world(on);
+  seen.calls = [];
+  seen.model = "owes";
+  await $.session.start(START);
+  await measure($, 400_000);
+  await turn(
+    $,
+    "Отчёт готов и проверки зелёные. Миграцию сделаю потом, когда придёт ответ.\nХвосты для агента: нет\nХвосты для владельца: нет",
+  );
+  await advance(clock, 0);
+  expect(seen.asked.at(-1)).toContain("Миграцию сделаю потом");
+  expect(seen.statuses.at(-1)).toContain(OWES);
+  expect(seen.suggested).toHaveLength(0);
+});

@@ -138,13 +138,16 @@ remembers the files the session's tools wrote to, and at each turn start and
 after each tool that can change files asks git, in the session's directory and
 in every repository of those files, for uncommitted changes and for commits not
 on the upstream (or on any remote). Untracked files count only when the session
-wrote them. When git says nothing the line never claims "everything recorded".
+wrote them. At a resume the list is rebuilt from the transcript — the main
+loop's rows and the agents' an Agent call names, up to a bounded depth — so a
+file written before the resume still counts. When git says nothing the line
+never claims "everything recorded".
 
 **What it cannot see.** Changes made by another process between turns show at
 the next turn; files outside any repository are listed for the compaction
-template but never gate; a promise made to you in prose is not detected (the
-leftover lines are the only proxy); after a resume the list of written paths
-starts empty, so only the session's own repository is checked; a squash-merged
+template but never gate; a promise deeper than the answer's last 6000
+characters is beyond the model check; a subagent's transcript stores no tool
+records, so what its Bash calls changed is lost to a resume; a squash-merged
 branch counts as recorded only when its upstream is gone and every path it
 changed matches origin's default branch as last fetched (offline, no network);
 if main has changed those paths since, or the branch never had an upstream,
