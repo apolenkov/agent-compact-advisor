@@ -1,4 +1,9 @@
-import type { AgentInfo, On, ProcessRunResult } from "claude-code";
+import type {
+  AgentInfo,
+  On,
+  ProcessRunResult,
+  SessionMessage,
+} from "claude-code";
 
 // A promise that never settles: Boolean is a non-empty executor that ignores it.
 const NEVER = new Promise<never>(Boolean);
@@ -34,6 +39,10 @@ export interface World {
   model: string;
   /** The prompts the model was asked, one per call. */
   asked: string[];
+  /** What `$.session.messages()` answers: the main rows and each agent's. */
+  messages: SessionMessage[];
+  /** An agent's rows, or the `{ deny }` shape a denied transcript returns. */
+  agentMessages: Record<string, SessionMessage[] | { deny: string }>;
 }
 
 /**
@@ -130,6 +139,8 @@ export const world = (on: On): World => {
     repos: {},
     model: "clean",
     asked: [],
+    messages: [],
+    agentMessages: {},
   };
   on("state.get", { plugin: "agent-shell-watch" }, () => ({
     value:
@@ -163,6 +174,12 @@ export const world = (on: On): World => {
     return { isShown: true };
   });
   on("agent.list", () => ({ value: seen.agents }));
+  on("session.messages", (_$, e) => ({
+    value:
+      e.agentId === undefined
+        ? seen.messages
+        : (seen.agentMessages[e.agentId] ?? []),
+  }));
   on("http.fetch", async (_$, e) => {
     seen.posts.push(e.init?.body ?? "");
     if (seen.kev === "hang") {

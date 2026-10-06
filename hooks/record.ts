@@ -3,7 +3,7 @@
  * follows `$` only inside the file that holds it, and the advisor's main
  * module reads these two states instead.
  */
-import type { EngineInterface, On } from "claude-code";
+import type { EngineInterface, On, SessionMessage } from "claude-code";
 import { atom, read, update } from "claude-code";
 
 import type { Recorded } from "../types";
@@ -14,7 +14,7 @@ import {
   sumOf,
   unrecordedIn,
 } from "./model/unrecorded.ts";
-import { quietly } from "./quietly.ts";
+import { orElse, quietly } from "./quietly.ts";
 
 type Engine = Readonly<EngineInterface>;
 
@@ -181,6 +181,89 @@ const refresh = async ($: Engine): Promise<void> => {
   await update($, recordedAtom, (held): Recorded => ({ ...held, at, value }));
 };
 
+// One conversation's rows as `$.session.messages` reports them: an agent's
+// transcript is denied ({ deny }) rather than a list, that reads as empty.
+const rowsOf = async (
+  $: Engine,
+  agentId?: string,
+): Promise<readonly SessionMessage[]> => {
+  const rows = await orElse(
+    (async () =>
+      agentId === undefined
+        ? await $.session.messages()
+        : await $.session.messages({ agentId }))(),
+    [],
+  );
+  return Array.isArray(rows) ? rows : [];
+};
+
+const AGENTS_MAX = 16;
+
+const agentIdsOf = (
+  rows: readonly SessionMessage[],
+  seen: ReadonlySet<string>,
+): readonly string[] => [
+  ...new Set(
+    rows.flatMap((row) =>
+      row.toolUses
+        .map((use) => use.agentId)
+        .filter((id): id is string => id !== undefined && !seen.has(id)),
+    ),
+  ),
+];
+
+// One level deeper into the transcripts: an agent's own Agent calls name
+// grandchildren. `seen` is the visited set and the fuel: it grows by at least
+// one id a level and the walk stops once it holds AGENTS_MAX.
+const rowsDeep = async (
+  $: Engine,
+  ids: readonly (string | undefined)[],
+  seen: ReadonlySet<string>,
+): Promise<readonly SessionMessage[]> => {
+  const conversations = await Promise.all(ids.map((id) => rowsOf($, id)));
+  const rows = conversations.flat();
+  const found = agentIdsOf(rows, seen);
+  const next = found.slice(0, AGENTS_MAX - seen.size);
+  if (next.length === 0) {
+    return rows;
+  }
+  const deeper = await rowsDeep($, next, new Set([...seen, ...next]));
+  return [...rows, ...deeper];
+};
+
+// The paths the transcript's answered tool calls wrote to: the main loop's
+// and each agent's an Agent call names. On a resume this restores what the
+// in-memory list lost; on a fresh start it is empty; a hot reload adds nothing.
+const transcriptPaths = async ($: Engine): Promise<readonly string[]> => {
+  const rows = await rowsDeep($, [undefined], new Set());
+  return rows.flatMap((row) =>
+    row.toolUses.flatMap((use) =>
+      use.isError === true ? [] : pathsOf(use.tool, use.input, use),
+    ),
+  );
+};
+
+// Restores the touched list from the transcript and refreshes git once. Its
+// own session.start: `$` stays inside the file that registers it, and the
+// matcher keeps the two registrations distinct — a session's cwd is always
+// absolute, so this still fires on every start, resume or not. Before the
+// rest of the chain runs: the restored list and a fresh reading are what the
+// first draw of a resumed session scores by. A transcript it cannot read
+// leaves nothing and stops nothing.
+const restoreTouched = async ($: Engine): Promise<void> => {
+  const paths = await orElse(transcriptPaths($), []);
+  if (paths.length === 0) {
+    return;
+  }
+  await quietly(
+    update($, recordedAtom, (held): Recorded => ({
+      ...held,
+      touched: withTouched(held.touched, paths),
+    })),
+  );
+  await quietly(refresh($));
+};
+
 // A tool that can change files or commit: git is asked after it.
 const CHANGERS = new Set([
   "Bash",
@@ -198,6 +281,10 @@ const CHANGERS = new Set([
  * @param on the registrar
  */
 export const recordHooks = (on: On): void => {
+  on("session.start", { cwd: /.+/u }, async ($, e, next) => {
+    await restoreTouched($);
+    return next(e);
+  });
   on("tool.call", async ($, e, next) => {
     const outcome = await next(e);
     const paths = pathsOf(e.tool, e, outcome);
