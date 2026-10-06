@@ -34,7 +34,8 @@ concurrency:
 
 env:
   MAX_ATTEMPTS: "2"
-  # Paths the agent must never change: CI, hooks, check configuration, secrets.
+  # Paths the agent must never change: CI, hooks, check configuration, secrets, and every test
+  # (a fix that makes a check pass by weakening a test would merge unseen: no human review on main).
   # Bash globs; also turned into opencode `edit` deny rules in the fix job.
   PROTECTED: |
     .github/*
@@ -65,7 +66,7 @@ env:
     .npmrc
     AGENTS.md
     ci-failure.log
-    tests/night-fix/*
+    tests/*
     .editorconfig
     .gitignore
     release-please-config.json
