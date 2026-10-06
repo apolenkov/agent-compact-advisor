@@ -57,7 +57,65 @@ const rootOf = async ($: Engine, path: string): Promise<string | undefined> => {
   return top?.trim();
 };
 
-// Commits not on the upstream, else not on any remote (a branch with none).
+const lineOf = async (
+  $: Engine,
+  root: string,
+  args: readonly string[],
+): Promise<string | undefined> => {
+  const out = await gitIn($, root, args);
+  return out?.trim();
+};
+
+// The trunk of origin and the merge-base with it, when the branch has left
+// its upstream (tracked once, now gone).
+const forkOf = async (
+  $: Engine,
+  root: string,
+): Promise<{ trunk: string; base: string } | undefined> => {
+  const branch = await lineOf($, root, ["symbolic-ref", "--short", "HEAD"]);
+  const tracked =
+    branch === undefined
+      ? undefined
+      : await gitIn($, root, ["config", `branch.${branch}.merge`]);
+  const trunk = await lineOf($, root, [
+    "rev-parse",
+    "--abbrev-ref",
+    "origin/HEAD",
+  ]);
+  const base =
+    trunk === undefined
+      ? undefined
+      : await lineOf($, root, ["merge-base", trunk, "HEAD"]);
+  return tracked === undefined || trunk === undefined || base === undefined
+    ? undefined
+    : { trunk, base };
+};
+
+// A branch whose upstream is gone and whose every change is in origin's
+// default branch as it is now: squash-merged, nothing is lost. Offline.
+const isSquashMerged = async ($: Engine, root: string): Promise<boolean> => {
+  const fork = await forkOf($, root);
+  const changed =
+    fork === undefined
+      ? undefined
+      : await gitIn($, root, ["diff", "--name-only", fork.base, "HEAD"]);
+  const paths = (changed ?? "").split("\n").filter((line) => line !== "");
+  const differs =
+    fork === undefined || paths.length === 0
+      ? undefined
+      : await lineOf($, root, [
+          "diff",
+          "--name-only",
+          fork.trunk,
+          "HEAD",
+          "--",
+          ...paths,
+        ]);
+  return differs === "";
+};
+
+// Commits not on the upstream, else not on any remote (a branch with none);
+// none when the branch is squash-merged and only its upstream is gone.
 const aheadOf = async (
   $: Engine,
   root: string,
@@ -72,7 +130,9 @@ const aheadOf = async (
       "--not",
       "--remotes",
     ]));
-  return counted === undefined ? undefined : Number(counted.trim());
+  const count = counted === undefined ? undefined : Number(counted.trim());
+  const isLeft = upstream === undefined && count !== undefined && count > 0;
+  return isLeft && (await isSquashMerged($, root)) ? 0 : count;
 };
 
 const stateOf = async (

@@ -144,8 +144,11 @@ wrote them. When git says nothing the line never claims "everything recorded".
 the next turn; files outside any repository are listed for the compaction
 template but never gate; a promise made to you in prose is not detected (the
 leftover lines are the only proxy); after a resume the list of written paths
-starts empty, so only the session's own repository is checked; a local branch
-whose pull request was squash-merged counts as unpushed until it is deleted.
+starts empty, so only the session's own repository is checked; a squash-merged
+branch counts as recorded only when its upstream is gone and every path it
+changed matches origin's default branch as last fetched (offline, no network);
+if main has changed those paths since, or the branch never had an upstream,
+its commits still count as unpushed.
 
 ## Configuration
 

@@ -29,7 +29,19 @@ export interface World {
    * What git says per repository root (its `status --porcelain` lines and the
    * commits ahead); no entry for a directory means it is no repository.
    */
-  repos: Record<string, { status: string[]; ahead: number }>;
+  repos: Record<string, Repository>;
+}
+
+/**
+ * One repository as git answers it. `branch` is set when the checked-out
+ * branch has left its upstream: `gone` (tracked, upstream deleted) or `none`
+ * (never tracked); `trunkDiff` is what `git diff --name-only origin/HEAD HEAD`
+ * lists over the branch's own paths, empty when origin has them all.
+ */
+export interface Repository {
+  status: string[];
+  ahead: number;
+  branch?: { upstream: "gone" | "none"; trunkDiff: string };
 }
 
 const done = (exitCode: number, stdout: string): ProcessRunResult => ({
@@ -41,20 +53,59 @@ const done = (exitCode: number, stdout: string): ProcessRunResult => ({
 });
 
 // What git prints for the three questions the advisor asks.
-const processAnswer = (
-  root = "",
-  repository: { status: string[]; ahead: number } | undefined,
-  verb = "",
-): { value: ProcessRunResult } => {
+const kindOf = (argv: readonly string[]): string => {
+  const [, verb = "", first = "", second = ""] = argv;
+  if (argv.includes("@{u}..HEAD")) {
+    return "noUpstream";
+  }
+  if (verb === "diff") {
+    return second === "abc" ? "ownPaths" : "trunkDiff";
+  }
+  return first === "--abbrev-ref" ? "trunk" : verb;
+};
+
+const branchAnswer = (
+  branch: NonNullable<Repository["branch"]>,
+  argv: readonly string[],
+): ProcessRunResult | undefined => {
+  const answers: Readonly<Record<string, ProcessRunResult>> = {
+    noUpstream: done(128, ""),
+    "symbolic-ref": done(0, "feature\n"),
+    config:
+      branch.upstream === "gone"
+        ? done(0, "refs/heads/feature\n")
+        : done(1, ""),
+    trunk: done(0, "origin/main\n"),
+    "merge-base": done(0, "abc\n"),
+    ownPaths: done(0, "a.ts\n"),
+    trunkDiff: done(0, branch.trunkDiff),
+  };
+  return answers[kindOf(argv)];
+};
+
+const plainAnswer = (
+  root: string,
+  repository: Repository | undefined,
+  verb: string,
+): ProcessRunResult => {
   const answers: Readonly<Record<string, string>> = {
     "rev-parse": `${root}\n`,
     status: (repository?.status ?? []).map((line) => `${line}\n`).join(""),
     "rev-list": `${String(repository?.ahead ?? 0)}\n`,
   };
-  return {
-    value:
-      repository === undefined ? done(128, "") : done(0, answers[verb] ?? ""),
-  };
+  return repository === undefined
+    ? done(128, "")
+    : done(0, answers[verb] ?? "");
+};
+
+const processAnswer = (
+  root = "",
+  repository: Repository | undefined,
+  argv: readonly string[] = [],
+): { value: ProcessRunResult } => {
+  const plain = plainAnswer(root, repository, argv[1] ?? "");
+  const branched = repository?.branch && branchAnswer(repository.branch, argv);
+  return { value: branched ?? plain };
 };
 
 /**
@@ -90,7 +141,7 @@ export const world = (on: On): World => {
       (one) => cwd === one || cwd.startsWith(`${one}/`),
     );
     const repository = root === undefined ? undefined : seen.repos[root];
-    return processAnswer(root, repository, e.argv[1]);
+    return processAnswer(root, repository, e.argv);
   });
   on("command.register", (_$, e) => ({ value: { command: e.name } }));
   on("ui.status", (_$, e) => {
