@@ -6,39 +6,46 @@
  */
 import type {
   EngineInterface,
-  Next,
   Register,
   SessionCompactInput,
-  SessionCompactResult,
-  SessionContextUsage,
   TurnCompleteInput,
 } from "claude-code";
 import { atom, read, update } from "claude-code";
 
-import type { AdvisorFacts } from "../types";
+import type { AdvisorFacts, Recorded } from "../types";
+import { type Calls, callsOf } from "./model/calls.ts";
 import { type Config, configOf } from "./model/config.ts";
+import { drawnFrom } from "./model/drawn.ts";
 import { type Drawn, explanationOf, statusLineOf } from "./model/format.ts";
 import { kevBodyOf, noulOf } from "./model/kev.ts";
-import { leftoversOf } from "./model/leftovers.ts";
+import { leftoversOf, ownerAskOf } from "./model/leftovers.ts";
 import { offerOf } from "./model/offer.ts";
-import { isCacheWarm, scoreOf, type Signals } from "./model/score.ts";
 import { SUGGESTION, withTemplate } from "./model/template.ts";
+import { quietly } from "./quietly.ts";
+import { recordHooks } from "./record.ts";
 
 type Engine = Readonly<EngineInterface>;
 
 const COMMAND = "compact-advisor";
-const INITIAL: AdvisorFacts = {
-  leftovers: { kind: "unknown" },
-  p1: { kind: "na" },
-  wasAbove: false,
-  wasAlerted: false,
-};
 const factsAtom = atom(
   { plugin: "agent-compact-advisor", key: "facts" } as const,
-  INITIAL,
+  {
+    leftovers: { kind: "unknown" },
+    p1: { kind: "na" },
+    wasAbove: false,
+    wasAlerted: false,
+  } satisfies AdvisorFacts,
+);
+// What the session wrote and what git says of it: hooks/record.ts keeps it.
+const recordedAtom = atom(
+  { plugin: "agent-compact-advisor", key: "recorded" } as const,
+  {
+    at: Number.MIN_SAFE_INTEGER,
+    value: undefined,
+    touched: [],
+  } satisfies Recorded,
 );
 const watchCalls = { plugin: "agent-shell-watch", key: "calls" } as const;
-const LIVE = new Set(["running", "quiet", "hung"]);
 // Agents and background calls end between turns, and the cache goes cold:
 // a slow redraw sees it; it outlives no reload, as session.start starts it.
 const REDRAW_MS = 30_000;
@@ -78,12 +85,10 @@ const askKev = async (
 
 // agent-shell-watch writes its calls at every session start: a value never
 // written means it is not installed, so background work is unknown.
-const liveCallsOf = async ($: Engine): Promise<number | undefined> => {
+const callsStateOf = async ($: Engine): Promise<Calls | undefined> => {
   try {
     const { value, version } = await $.state.get(watchCalls);
-    return version === 0 || value === undefined
-      ? undefined
-      : value.filter((call) => LIVE.has(call.status)).length;
+    return version === 0 || value === undefined ? undefined : callsOf(value);
   } catch {
     return undefined;
   }
@@ -98,32 +103,18 @@ const runningAgentsOf = async ($: Engine): Promise<number> => {
   }
 };
 
-const signalsOf = async ($: Engine): Promise<Signals> => ({
-  facts: await read($, factsAtom),
-  runningAgents: await runningAgentsOf($),
-  liveCalls: await liveCallsOf($),
-  now: await $.clock.now(),
-});
-
 const drawnOf = async ($: Engine, config: Config): Promise<Drawn> => {
-  const signals = await signalsOf($);
-  return {
-    verdict: scoreOf(signals, config),
-    facts: signals.facts,
-    isCacheWarm: isCacheWarm(signals, config),
-    isBackgroundKnown: signals.liveCalls !== undefined,
+  const recorded = await read($, recordedAtom);
+  return drawnFrom(
+    {
+      facts: await read($, factsAtom),
+      calls: await callsStateOf($),
+      recorded: recorded.value,
+      runningAgents: await runningAgentsOf($),
+      now: await $.clock.now(),
+    },
     config,
-  };
-};
-
-// Timer work outlives its dispatch: after a reload or the session's end its
-// environment is gone and every $ call it still makes is refused.
-const quietly = async (work: Promise<void>): Promise<void> => {
-  try {
-    await work;
-  } catch {
-    // Nothing to tell: the session it would have drawn for is gone.
-  }
+  );
 };
 
 const draw = async (
@@ -168,17 +159,25 @@ const settleP1 = async (
 };
 
 const onCompact = async (
-  e: Readonly<SessionCompactInput>,
-  next: Next<"session.compact">,
+  $: Engine,
   config: Config,
-): Promise<SessionCompactResult> => {
+  e: Readonly<SessionCompactInput>,
+): Promise<SessionCompactInput> => {
   const isGuarded =
     config.guardCompactions &&
     e.agentId === undefined &&
     (e.trigger === "manual" || e.trigger === "auto");
-  return next(
-    isGuarded ? { ...e, instructions: withTemplate(e.instructions) } : e,
-  );
+  const facts = await read($, factsAtom);
+  const calls = await callsStateOf($);
+  const recorded = await read($, recordedAtom);
+  const carry = {
+    ownerAsk: facts.ownerAsk,
+    waiters: calls?.waiters ?? [],
+    touched: recorded.touched,
+  };
+  return isGuarded
+    ? { ...e, instructions: withTemplate(e.instructions, carry) }
+    : e;
 };
 
 // session.start fires again on a hot reload, which dropped the timers: the
@@ -198,17 +197,14 @@ const start = async ($: Engine, config: Config): Promise<void> => {
   await draw($, config, false);
 };
 
-const noteMeasure = async (
+// A new reading of the size, from the engine or from a compaction that stands
+// (which resets it, so a stale score does not stay).
+const noteSize = async (
   $: Engine,
   config: Config,
-  context: Readonly<SessionContextUsage>,
+  size: Pick<AdvisorFacts, "percent" | "tokens" | "window">,
 ): Promise<void> => {
-  await update($, factsAtom, (facts): AdvisorFacts => ({
-    ...facts,
-    tokens: context.tokens,
-    window: context.window,
-    percent: context.percent,
-  }));
+  await update($, factsAtom, (facts): AdvisorFacts => ({ ...facts, ...size }));
   await draw($, config, false);
 };
 
@@ -226,6 +222,7 @@ const noteTurn = async (
   await update($, factsAtom, (facts): AdvisorFacts => ({
     ...facts,
     leftovers,
+    ownerAsk: ownerAskOf(e.answer, config.leftovers),
     p1: { kind: isAsked ? "pending" : "na" },
     turnId: e.turnId,
     lastTurnAt: now,
@@ -241,20 +238,6 @@ const noteTurn = async (
   });
 };
 
-// A compaction that stands resets the size, so a stale score does not stay.
-const noteCompaction = async (
-  $: Engine,
-  config: Config,
-  tokensAfter: number | undefined,
-): Promise<void> => {
-  await update($, factsAtom, (facts): AdvisorFacts => ({
-    ...facts,
-    tokens: tokensAfter,
-    percent: undefined,
-  }));
-  await draw($, config, false);
-};
-
 /**
  * Wires agent-compact-advisor's hooks.
  * @param on the registrar
@@ -262,6 +245,7 @@ const noteCompaction = async (
  */
 export const register: Register = (on, options) => {
   const config = configOf(options);
+  recordHooks(on);
   on("session.start", async ($, e, next) => {
     const started = await next(e);
     await start($, config);
@@ -269,7 +253,7 @@ export const register: Register = (on, options) => {
   });
   on("session.measure", async ($, e, next) => {
     const measured = await next(e);
-    await noteMeasure($, config, e.context);
+    await noteSize($, config, e.context);
     return measured;
   });
   on("turn.complete", async ($, e, next) => {
@@ -280,10 +264,13 @@ export const register: Register = (on, options) => {
     return completed;
   });
   on("session.compact", async ($, e, next) => {
-    const compacted = await onCompact(e, next, config);
+    const compacted = await next(await onCompact($, config, e));
     const isMain = e.agentId === undefined && e.trigger !== "precompute";
     if (isMain && compacted.skip === undefined) {
-      await noteCompaction($, config, compacted.tokensAfter);
+      await noteSize($, config, {
+        tokens: compacted.tokensAfter,
+        percent: undefined,
+      });
     }
     return compacted;
   });

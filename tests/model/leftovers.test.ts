@@ -1,6 +1,6 @@
 import { expect, test } from "claude-code/testing";
 
-import { leftoversOf } from "../../hooks/model/leftovers.ts";
+import { leftoversOf, ownerAskOf } from "../../hooks/model/leftovers.ts";
 
 const RULE = {
   prefixes: ["Хвосты для агента:", "Хвосты для владельца:", "Leftovers:"],
@@ -22,7 +22,25 @@ test("a listed leftover wins and is carried, cut short", () => {
   expect(leftoversOf(answer, RULE)).toEqual({
     kind: "listed",
     text: "создать репозиторий на GitHub и подключ…",
+    isOwner: true,
   });
+});
+
+test("the agent's own listed leftover is not an owner question", () => {
+  const answer = "Хвосты для агента: слить PR 51\nХвосты для владельца: нет";
+  expect(leftoversOf(answer, RULE)).toEqual({
+    kind: "listed",
+    text: "слить PR 51",
+  });
+  expect(ownerAskOf(answer, RULE)).toBeUndefined();
+});
+
+test("the owner's line is what the answer asks, whole up to a limit", () => {
+  const ask = "решить, убирать ли шаг eval в четырёх репозиториях";
+  const answer = `Хвосты для агента: нет\nХвосты для владельца: ${ask}.`;
+  expect(ownerAskOf(answer, RULE)).toBe(ask);
+  expect(ownerAskOf("Хвосты для владельца: нет", RULE)).toBeUndefined();
+  expect(ownerAskOf("nothing", RULE)).toBeUndefined();
 });
 
 test("no line is unknown; the last line per prefix counts", () => {
@@ -58,6 +76,7 @@ test("list marks and bold around the prefix still count", () => {
     expect(leftoversOf(`Хвосты для агента: нет\n${owner}`, RULE)).toEqual({
       kind: "listed",
       text: "push",
+      isOwner: true,
     });
   }
 });

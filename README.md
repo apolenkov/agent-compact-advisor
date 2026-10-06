@@ -43,10 +43,15 @@ agent-compact-advisor: контекст 61% — пора компактить ·
   agents or background calls run).
 - 💡 **Suggestion** past the threshold (70): a ready one-line `/compact …` in
   the empty prompt box, Tab takes it; one toast when the score first crosses.
+- 🔎 **Judges from the session's history**, not from the size: running
+  agents, background work in classes (a poll for a merge is no obstacle), a
+  runner whose result is unread, changes that no commit or push holds (asked
+  of git) and the agent's own leftovers; "everything recorded" when none.
 - 🛡️ **Guard**: every `/compact` and auto-compaction of the main
   conversation gets a preservation template added after your own text (goal,
-  decisions, open leftovers verbatim, absolute file paths, verification
-  results, what not to do). It never cancels a compaction.
+  decisions, open leftovers verbatim, the owner's open question, what each
+  background wait waits for, absolute file paths, verification results, what
+  not to do). It never cancels a compaction.
 - 🔍 **`/compact-advisor`** explains the current score part by part.
 
 ## Install
@@ -79,9 +84,13 @@ Or try a checkout: `claude --plugin-dir /path/to/agent-compact-advisor`.
 
 A score, not a probability: nothing is calibrated.
 
-Gates set it to 0: no context reading yet, context under `minTokens` (100k),
-running agents, live background calls, or leftovers listed in the last answer
-(unless `ignoreLeftovers`).
+Gates set it to 0, and the line says which in words: no context reading yet,
+context under `minTokens` (100k), running agents, live background work,
+background work that hung ("stop it"), a runner that ended with its verdict
+unread, changes in the repositories the session touched that no commit or push
+holds (read from git), or leftovers the agent itself listed in the last answer
+(unless `ignoreLeftovers`). A question to the owner (the second leftover line)
+is no gate: the compaction template carries it.
 Otherwise it is a weighted sum:
 
 | Part      | Weight | Value                                                                            |
@@ -112,7 +121,31 @@ it "можно подождать: …".
 final 8000 characters, on loopback only, with a 20 s timeout.
 
 **Background calls** come from
-[agent-shell-watch](https://github.com/apolenkov/agent-shell-watch)'s call list.
+[agent-shell-watch](https://github.com/apolenkov/agent-shell-watch)'s call list
+and are told apart by what a compaction would lose with each:
+
+- a **waiter** polls an external event (a loop that only sleeps and reads:
+  `gh pr view`, `gh run watch`, `curl`, `grep`) and loses nothing: it does not
+  gate, the line says how many run, and the compaction template names what each
+  waits for;
+- **work** (a runner, a build, any command that is not a poll, and every
+  command the advisor cannot read) gates;
+- **work that hung** gates as "stop it", never as "wait";
+- a call that finished never counts, except a runner whose verdict is unread.
+
+**Unrecorded work** is read from git, not guessed from commands: the advisor
+remembers the files the session's tools wrote to, and at each turn start and
+after each tool that can change files asks git, in the session's directory and
+in every repository of those files, for uncommitted changes and for commits not
+on the upstream (or on any remote). Untracked files count only when the session
+wrote them. When git says nothing the line never claims "everything recorded".
+
+**What it cannot see.** Changes made by another process between turns show at
+the next turn; files outside any repository are listed for the compaction
+template but never gate; a promise made to you in prose is not detected (the
+leftover lines are the only proxy); after a resume the list of written paths
+starts empty, so only the session's own repository is checked; a local branch
+whose pull request was squash-merged counts as unpushed until it is deleted.
 
 ## Configuration
 

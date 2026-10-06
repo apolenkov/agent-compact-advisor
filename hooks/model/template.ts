@@ -19,12 +19,52 @@ export const TEMPLATE = [
 export const SUGGESTION =
   "/compact Keep the goal and task id, decisions with reasons, open leftovers verbatim, absolute file paths, verification commands and results, and what not to do.";
 
+/** What this session has that a summary could drop, named for the template. */
+export interface Carry {
+  /** The owner's leftover line of the last answer: a question the summary must keep. */
+  readonly ownerAsk?: string | undefined;
+  /** What each running background wait waits for. */
+  readonly waiters: readonly string[];
+  /** Paths the session wrote to. */
+  readonly touched: readonly string[];
+}
+
+const PATHS_MAX = 15;
+const WAITERS_MAX = 10;
+
+const carriedOf = (carry: Carry): readonly string[] => [
+  ...(carry.ownerAsk === undefined
+    ? []
+    : [
+        `- Open questions to the owner, verbatim from the last answer: ${carry.ownerAsk}`,
+      ]),
+  ...(carry.waiters.length === 0
+    ? []
+    : [
+        `- Background waits still running (what each waits for; its notification arrives after the compaction): ${carry.waiters.slice(0, WAITERS_MAX).join("; ")}`,
+      ]),
+  ...(carry.touched.length === 0
+    ? []
+    : [
+        `- Paths written this session: ${carry.touched.slice(-PATHS_MAX).join(", ")}`,
+      ]),
+];
+
 /**
  * The compaction's instructions with the template added after the owner's own.
  * @param instructions what was typed after `/compact`, if anything
- * @returns the template alone, or the owner's text and then the template
+ * @param carry the session's open question, running waits and written paths
+ * @returns the template (with what must be carried) alone, or the owner's text
+ *   and then the template
  */
-export const withTemplate = (instructions: string | undefined): string => {
+export const withTemplate = (
+  instructions: string | undefined,
+  carry?: Carry,
+): string => {
   const own = instructions?.trim() ?? "";
-  return own === "" ? TEMPLATE : `${own}\n\n${TEMPLATE}`;
+  const template = [
+    TEMPLATE,
+    ...(carry === undefined ? [] : carriedOf(carry)),
+  ].join("\n");
+  return own === "" ? template : `${own}\n\n${template}`;
 };
