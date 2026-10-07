@@ -81,9 +81,9 @@ env:
     types/index.d.ts
     scripts/update-types.sh
   # The linux-x64 binary package of opencode-ai, pinned by version and registry
-  # integrity (npm view, 2026-10-05). The opencode-ai wrapper needs a postinstall.
-  OPENCODE_VERSION: 1.18.34
-  OPENCODE_INTEGRITY: sha512-RTAMjCve4euxP2QKLuvRmdoW5J5DQK1DiZqt+7slfixyjAEi79QC2Df2oYKogibaAI4IEU8uzenoJeEl3k+UEw==
+  # integrity (npm view, 2026-10-07). The opencode-ai wrapper needs a postinstall.
+  OPENCODE_VERSION: 1.18.35
+  OPENCODE_INTEGRITY: sha512-xs/DPt8bK6NTWHpOlVJDWC/P3BnAuAQFHwa+mjrbxhDGd0Pi/GGWGjh4Sr4cpv6KwvfUKVoLKfHc/J8Nnz0XMg==
   OPENCODE_MODEL: opencode-go/deepseek-v4.1-flash
 
 jobs:
