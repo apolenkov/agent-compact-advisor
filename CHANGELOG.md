@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0](https://github.com/apolenkov/agent-compact-advisor/compare/v0.4.0...v0.5.0) (2026-10-06)
+
+
+### Features
+
+* **agent-compact-advisor:** calibrate the verdict on real compactions ([#30](https://github.com/apolenkov/agent-compact-advisor/issues/30)) ([984c2a3](https://github.com/apolenkov/agent-compact-advisor/commit/984c2a320dd9ea560fbb9809c04ae2fa041fdb6d))
+
+
+### Bug Fixes
+
+* **agent-compact-advisor:** restore the written paths from the transcript on start ([#31](https://github.com/apolenkov/agent-compact-advisor/issues/31)) ([c5d8d68](https://github.com/apolenkov/agent-compact-advisor/commit/c5d8d68f1bc6b98af66ee1d028aa8687b400783d))
+
 ## [0.4.0](https://github.com/apolenkov/agent-compact-advisor/compare/v0.3.1...v0.4.0) (2026-10-06)
 
 
