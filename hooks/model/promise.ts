@@ -31,7 +31,6 @@ const SYSTEM =
 // hold, so the model is not asked. Others (agents, background calls) end
 // between turns, and the "can" that follows needs the check already made.
 const HOLDING: ReadonlySet<Gate["kind"]> = new Set([
-  "small",
   "leftovers",
   "edits",
   "unpushed",

@@ -10,13 +10,15 @@ import { leftoversOf, ownerAskOf } from "./leftovers.ts";
 import type { Offer } from "./offer.ts";
 
 /**
- * A reload drops the timers: what was pending can never settle.
+ * A reload drops the timers: a pending priority verdict can never settle
+ * from the dead request, so it stays pending and holds until the next turn
+ * asks Kev again. A pending model check is per-answer noise: it still
+ * lapses, its late label sorts itself by turn.
  * @param facts the facts held
- * @returns the facts with a pending P1 and a pending check given up
+ * @returns the facts with a pending P1 kept and a pending check given up
  */
 export const restarted = (facts: AdvisorFacts): AdvisorFacts => ({
   ...facts,
-  ...(facts.p1.kind === "pending" && { p1: { kind: "na" } }),
   ...(facts.promise?.state === "pending" && {
     promise: { turnId: facts.promise.turnId, state: "na" },
   }),

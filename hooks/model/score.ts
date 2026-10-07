@@ -1,7 +1,7 @@
 /**
  * The compaction score 0–100: gates, a weighted sum, caps, and its words.
  */
-import type { AdvisorFacts, Checked, Leftovers, P1 } from "../../types";
+import type { AdvisorFacts, Checked, Leftovers } from "../../types";
 import type { Config } from "./config.ts";
 
 /** Everything a score is computed from at one moment. */
@@ -29,7 +29,7 @@ export interface Unrecorded {
 
 /** One weighted part of the score, its value 0..1. */
 interface Part {
-  readonly name: "fill" | "leftovers" | "P1" | "cache";
+  readonly name: "fill" | "leftovers" | "cache";
   readonly weight: number;
   readonly value: number;
 }
@@ -37,7 +37,6 @@ interface Part {
 /** Why the score is 0: structured, so the status line can word it. */
 export type Gate =
   | Readonly<{ kind: "unread" }>
-  | Readonly<{ kind: "small"; tokens: number }>
   | Readonly<{ kind: "agents"; count: number }>
   | Readonly<{ kind: "calls"; count: number }>
   | Readonly<{ kind: "stale"; count: number }>
@@ -46,7 +45,8 @@ export type Gate =
   | Readonly<{ kind: "unpushed"; count: number }>
   | Readonly<{ kind: "leftovers"; text: string }>
   | Readonly<{ kind: "checking" }>
-  | Readonly<{ kind: "owes" }>;
+  | Readonly<{ kind: "owes" }>
+  | Readonly<{ kind: "p1" }>;
 
 /** What caps the score at 60: something the advisor cannot see. */
 type Cap = "background" | "leftovers";
@@ -65,7 +65,7 @@ const KILO = 1000;
 const UNKNOWN_CAP = 60;
 // The fill part is complete at this share of the window at most.
 const FULL_SHARE = 0.9;
-const WEIGHTS = { fill: 40, leftovers: 30, p1: 20, cache: 10 } as const;
+const WEIGHTS = { fill: 40, leftovers: 30, cache: 10 } as const;
 
 // What no commit or push holds in the repositories the session touched.
 const recordGates = (unrecorded: Unrecorded | undefined): readonly Gate[] => [
@@ -86,6 +86,9 @@ const leftoverGates = (facts: AdvisorFacts, config: Config): readonly Gate[] =>
     : [];
 
 // The model's check of this turn's answer: only a gate, never a way out of one.
+// A settled debt outlives its turn: it holds until a checked answer clears
+// it, so a turn that ends without an answer does not forgive it. A pending
+// check is same-turn only: an orphaned one can never settle.
 const checkGates = (facts: AdvisorFacts): readonly Gate[] => {
   const { promise } = facts;
   const found: Readonly<Partial<Record<Checked["state"], Gate>>> = {
@@ -93,7 +96,8 @@ const checkGates = (facts: AdvisorFacts): readonly Gate[] => {
     owes: { kind: "owes" },
   };
   const gate =
-    promise !== undefined && promise.turnId === facts.turnId
+    promise !== undefined &&
+    (promise.state === "owes" || promise.turnId === facts.turnId)
       ? found[promise.state]
       : undefined;
   return gate === undefined ? [] : [gate];
@@ -102,10 +106,8 @@ const checkGates = (facts: AdvisorFacts): readonly Gate[] => {
 const gateOf = (signals: Signals, config: Config): Gate | undefined => {
   const { facts, runningAgents, liveCalls = 0 } = signals;
   const { staleCalls = 0, unreadRunners = 0 } = signals;
-  const { tokens = 0 } = facts;
   const gates: readonly (Gate | false)[] = [
     facts.tokens === undefined && { kind: "unread" },
-    tokens < config.minTokens && { kind: "small", tokens },
     runningAgents > 0 && { kind: "agents", count: runningAgents },
     liveCalls > 0 && { kind: "calls", count: liveCalls },
     staleCalls > 0 && { kind: "stale", count: staleCalls },
@@ -113,6 +115,9 @@ const gateOf = (signals: Signals, config: Config): Gate | undefined => {
     ...recordGates(signals.unrecorded),
     ...leftoverGates(facts, config),
     ...checkGates(facts),
+    // Kev's priority verdict has not arrived: unfinished work is a gate,
+    // never 0 points a high fill could compensate.
+    facts.p1.kind === "pending" && { kind: "p1" as const },
   ];
   return gates.find((gate) => gate !== false);
 };
@@ -127,18 +132,27 @@ export const isCacheWarm = (signals: Signals, config: Config): boolean =>
   signals.facts.lastTurnAt !== undefined &&
   signals.now - signals.facts.lastTurnAt < config.cacheTtlMs;
 
-// Pending counts as 0: a suggestion cannot be taken back once a low P1 lands.
-const p1Part = (p1: P1): readonly Part[] =>
-  p1.kind === "na"
-    ? []
-    : [
-        {
-          name: "P1",
-          weight: WEIGHTS.p1,
-          value: p1.kind === "value" ? p1.value : 0,
-        },
-      ];
-
+const partsOf = (
+  signals: Signals,
+  config: Config,
+  tokens: number,
+): readonly Part[] => {
+  const fill =
+    (tokens - config.minTokens) / (fullOf(signals, config) - config.minTokens);
+  return [
+    {
+      name: "fill",
+      weight: WEIGHTS.fill,
+      value: Math.min(1, Math.max(0, fill)),
+    },
+    ...leftoversPart(signals.facts.leftovers, config),
+    {
+      name: "cache",
+      weight: WEIGHTS.cache,
+      value: isCacheWarm(signals, config) ? 1 : 0,
+    },
+  ];
+};
 const fullOf = (signals: Signals, config: Config): number => {
   const { window } = signals.facts;
   const bound =
@@ -146,7 +160,7 @@ const fullOf = (signals: Signals, config: Config): number => {
   return Math.max(Math.min(config.fullTokens, bound), config.minTokens + 1);
 };
 
-// Ignored leftovers leave the sum and the rest rescales, like an absent P1.
+// Ignored leftovers leave the sum and the rest rescales.
 const leftoversPart = (
   leftovers: Leftovers,
   config: Config,
@@ -166,32 +180,6 @@ const leftoversPart = (
         },
       ];
 
-const partsOf = (
-  signals: Signals,
-  config: Config,
-  tokens: number,
-): readonly Part[] => {
-  const fill =
-    (tokens - config.minTokens) / (fullOf(signals, config) - config.minTokens);
-  return [
-    { name: "fill", weight: WEIGHTS.fill, value: Math.min(1, fill) },
-    ...leftoversPart(signals.facts.leftovers, config),
-    ...p1Part(signals.facts.p1),
-    {
-      name: "cache",
-      weight: WEIGHTS.cache,
-      value: isCacheWarm(signals, config) ? 1 : 0,
-    },
-  ];
-};
-
-const capsOf = (signals: Signals, config: Config): readonly Cap[] => [
-  ...(signals.liveCalls === undefined ? (["background"] as const) : []),
-  ...(!config.ignoreLeftovers && signals.facts.leftovers.kind === "unknown"
-    ? (["leftovers"] as const)
-    : []),
-];
-
 const weighed = (signals: Signals, config: Config): Verdict => {
   const parts = partsOf(signals, config, signals.facts.tokens ?? 0);
   const total = parts.reduce((sum, part) => sum + part.weight, 0);
@@ -201,19 +189,38 @@ const weighed = (signals: Signals, config: Config): Verdict => {
   );
   const caps = capsOf(signals, config);
   const raw = Math.round((PERCENT * sum) / total);
-  return {
-    score: caps.length > 0 ? Math.min(raw, UNKNOWN_CAP) : raw,
-    parts,
-    caps,
-  };
+  // Doubt caps, never adds: Kev's 0.55 bounds the score at 55, whatever
+  // the fill. The unseen caps below every threshold: unseen is never "can".
+  const doubt =
+    signals.facts.p1.kind === "value"
+      ? Math.round(PERCENT * signals.facts.p1.value)
+      : PERCENT;
+  const ceiling =
+    caps.length > 0
+      ? Math.min(UNKNOWN_CAP, Math.max(0, config.threshold - 1), doubt)
+      : doubt;
+  // Too small to bother is can at 0, never early: size is worth, not safety.
+  const worth =
+    signals.facts.tokens !== undefined &&
+    signals.facts.tokens < config.minTokens
+      ? 0
+      : Math.min(raw, ceiling);
+  return { score: worth, parts, caps };
 };
+
+const capsOf = (signals: Signals, config: Config): readonly Cap[] => [
+  ...(signals.liveCalls === undefined ? (["background"] as const) : []),
+  ...(!config.ignoreLeftovers && signals.facts.leftovers.kind === "unknown"
+    ? (["leftovers"] as const)
+    : []),
+];
 
 /**
  * Scores this moment for a compaction.
  * @param signals the facts, agents, background calls and time
  * @param config thresholds and weights' bounds
- * @returns 0 with the gate that holds, else the weighted sum, capped at 60
- *   while background or (unless ignored) leftovers are unknown
+ * @returns 0 with the gate that holds, else the worthwhileness sum, bounded
+ *   by Kev's doubt and kept below the threshold while anything is unseen
  */
 export const scoreOf = (signals: Signals, config: Config): Verdict => {
   const gate = gateOf(signals, config);

@@ -22,7 +22,6 @@ const FACTS: AdvisorFacts = {
 const PARTS: Verdict["parts"] = [
   { name: "fill", weight: 40, value: 1 },
   { name: "leftovers", weight: 30, value: 1 },
-  { name: "P1", weight: 20, value: 0.91 },
   { name: "cache", weight: 10, value: 1 },
 ];
 const RU = configOf({ alertPercent: 0 });
@@ -75,9 +74,6 @@ test("a gate says why it is early, with the size where it is not the reason", ()
   expect(
     statusLineOf(gated({ kind: "leftovers", text: "push" }, { facts: SMALL })),
   ).toBe("рано: хвосты — push · контекст 243k (24%)");
-  expect(statusLineOf(gated({ kind: "small", tokens: 50_000 }))).toBe(
-    "рано: контекст мал (50k)",
-  );
   expect(statusLineOf(gated({ kind: "unread" }))).toBe(
     "рано: размер контекста ещё неизвестен",
   );
@@ -127,14 +123,14 @@ test("the explanation lists parts, caps and the guard, in the language", () => {
   const capped = drawn({
     verdict: {
       score: 60,
-      parts: PARTS.filter((part) => part.name !== "P1"),
+      parts: PARTS,
       caps: ["leftovers"],
     },
     facts: { ...FACTS, p1: { kind: "na" } },
   });
   const ru = explanationOf(capped, true);
   expect(ru).toContain("- заполнение: 1.00 × 40");
-  expect(ru).toContain("- цель достигнута: не учитывается");
+  expect(ru).not.toContain("цель достигнута");
   expect(ru).toContain("- потолок 60: в последнем ответе нет строк о хвостах");
   expect(ru).toContain("шаблон сохранения");
   const en = explanationOf({ ...capped, config: EN }, true);
@@ -152,5 +148,6 @@ test("the explanation notes ignored leftovers and the alert", () => {
     true,
   );
   expect(text).toContain("- хвосты: не учитываются по настройке");
+  expect(text).toContain("- потолок 91: цель достигнута с вероятностью 91%");
   expect(text).toContain("- тревога: контекст 62% не ниже порога 60%");
 });

@@ -16,10 +16,11 @@ test("only gates that hold until the next turn skip the model", () => {
   expect(isAsked(undefined)).toBe(true);
   expect(isAsked({ kind: "agents", count: 1 })).toBe(true);
   expect(isAsked({ kind: "calls", count: 2 })).toBe(true);
-  expect(isAsked({ kind: "small", tokens: 5 })).toBe(false);
   expect(isAsked({ kind: "edits", count: 1 })).toBe(false);
   expect(isAsked({ kind: "unpushed", count: 1 })).toBe(false);
   expect(isAsked({ kind: "leftovers", text: "x" })).toBe(false);
+  // A debt outlives its turn, so the next answer re-asks and can clear it.
+  expect(isAsked({ kind: "owes" })).toBe(true);
 });
 
 test("the request is cheap and bounded, the answer a clipped tail in markers", () => {

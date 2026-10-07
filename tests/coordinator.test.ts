@@ -32,7 +32,7 @@ test(
     await turn($, COORDINATOR);
     await advance(clock, 0);
     expect(seen.statuses.at(-1)).toBe(
-      "хороший момент для /compact: оценка 97 из 100 · контекст 400k (40%) · цель достигнута с вероятностью 90% · кэш тёплый",
+      "хороший момент для /compact: оценка 90 из 100 · контекст 400k (40%) · цель достигнута с вероятностью 90% · кэш тёплый",
     );
     expect(seen.suggested.at(-1)).toMatch(/^\/compact/u);
   },
@@ -55,7 +55,7 @@ test(
   },
 );
 
-test("the size alert fires past 60% whatever the leftovers, once per crossing", async ($, on) => {
+test("the size alert fires past 60% but offers no /compact through a gate", async ($, on) => {
   const clock = mock.clock(on);
   const seen = world(on);
   seen.calls = [];
@@ -66,7 +66,7 @@ test("the size alert fires past 60% whatever the leftovers, once per crossing", 
   expect(seen.statuses.at(-1)).toBe(
     "контекст 65% — пора компактить · рано: хвосты — ждать итоги субагентов · контекст 650k (65%)",
   );
-  expect(seen.suggested).toHaveLength(1);
+  expect(seen.suggested).toHaveLength(0);
   expect(seen.toasts).toEqual(["контекст 65% — пора компактить"]);
   await measure($, 700_000);
   expect(seen.toasts).toHaveLength(1);

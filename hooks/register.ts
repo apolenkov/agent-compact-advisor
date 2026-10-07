@@ -122,12 +122,11 @@ const runningAgentsOf = async ($: Engine): Promise<number> => {
 };
 
 const drawnOf = async ($: Engine, config: Config): Promise<Drawn> => {
-  const recorded = await read($, recordedAtom);
   return drawnFrom(
     {
       facts: await read($, factsAtom),
       calls: await callsStateOf($),
-      recorded: recorded.value,
+      recorded: await read($, recordedAtom),
       runningAgents: await runningAgentsOf($),
       now: await $.clock.now(),
     },
@@ -214,8 +213,12 @@ const shouldCheck = async (
   e: Readonly<TurnCompleteInput>,
 ): Promise<boolean> => {
   const drawn = await drawnOf($, config);
+  // Tiny turns skip the paid check, as the small gate once did.
+  const isTiny = (drawn.facts.tokens ?? config.minTokens) < config.minTokens;
   const isReady =
-    isCheckable(config, e.reason, e.answer) && isAsked(drawn.verdict.gate);
+    !isTiny &&
+    isCheckable(config, e.reason, e.answer) &&
+    isAsked(drawn.verdict.gate);
   if (isReady) {
     await update($, factsAtom, (facts) => checked(facts, e.turnId, "pending"));
   }

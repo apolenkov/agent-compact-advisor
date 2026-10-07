@@ -12,7 +12,7 @@ export interface Read {
   readonly facts: AdvisorFacts;
   /** agent-shell-watch's calls in classes, undefined when it is not installed. */
   readonly calls: Calls | undefined;
-  readonly recorded: Recorded["value"];
+  readonly recorded: Recorded;
   readonly runningAgents: number;
   readonly now: number;
 }
@@ -25,6 +25,13 @@ export interface Read {
  */
 export const drawnFrom = (read: Read, config: Config): Drawn => {
   const { calls, recorded } = read;
+  // Git silent over the session's own writes reads as unrecorded, never
+  // as recorded: what nothing holds back counts file by file.
+  const unrecorded =
+    recorded.value ??
+    (recorded.touched.length > 0
+      ? { files: recorded.touched.length, commits: 0 }
+      : undefined);
   const signals: Signals = {
     facts: read.facts,
     runningAgents: read.runningAgents,
@@ -33,7 +40,7 @@ export const drawnFrom = (read: Read, config: Config): Drawn => {
       staleCalls: calls.stale,
       unreadRunners: calls.unread,
     }),
-    ...(recorded !== undefined && { unrecorded: recorded }),
+    ...(unrecorded !== undefined && { unrecorded }),
     now: read.now,
   };
   return {
@@ -41,7 +48,7 @@ export const drawnFrom = (read: Read, config: Config): Drawn => {
     facts: read.facts,
     isCacheWarm: isCacheWarm(signals, config),
     isBackgroundKnown: calls !== undefined,
-    isRecordKnown: recorded !== undefined,
+    isRecordKnown: recorded.value !== undefined,
     watchers: calls?.waiters.length ?? 0,
     config,
   };
