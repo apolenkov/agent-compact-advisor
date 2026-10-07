@@ -34,10 +34,6 @@ test("each gate sets 0 and names itself, in order", () => {
     score: 0,
     gate: { kind: "unread" },
   });
-  expect(scoreOf(facts({ tokens: 99_000 }), CONFIG).gate).toEqual({
-    kind: "small",
-    tokens: 99_000,
-  });
   expect(scoreOf(signals({ runningAgents: 2 }), CONFIG).gate).toEqual({
     kind: "agents",
     count: 2,
@@ -52,7 +48,27 @@ test("each gate sets 0 and names itself, in order", () => {
   ).toEqual({ kind: "leftovers", text: "push" });
 });
 
-test("P1 not available removes its weight and rescales", () => {
+test("a small context is not worthwhile, not early", () => {
+  // Size never blocks: 50k and everything recorded is can at 0.
+  const verdict = scoreOf(facts({ tokens: 50_000, percent: 5 }), CONFIG);
+  expect(verdict.gate).toBeUndefined();
+  expect(verdict.score).toBe(0);
+});
+
+test("a debt outlives its turn until a checked answer clears it", () => {
+  // Turn N+1 after an aborted one: no fresh answer, the owes still holds.
+  const verdict = scoreOf(
+    facts({
+      turnId: "N+1",
+      promise: { turnId: "N", state: "owes" },
+    }),
+    CONFIG,
+  );
+  expect(verdict.score).toBe(0);
+  expect(verdict.gate).toEqual({ kind: "owes" });
+});
+
+test("P1 not available caps nothing", () => {
   // fill 1×40 + leftovers 1×30 + cache 0×10 over 80 → 88
   const verdict = scoreOf(
     facts({ p1: { kind: "na" }, lastTurnAt: NOW - 600_000 }),
@@ -74,16 +90,26 @@ test("P1 pending blocks: the priority verdict has not arrived", () => {
   });
 });
 
+test("doubt caps, never adds: Kev's 0.55 bounds the score at 55", () => {
+  // No fill compensates it; 0.9 still suggests at 90.
+  const capped = scoreOf(facts({ p1: { kind: "value", value: 0.55 } }), CONFIG);
+  expect(capped.score).toBe(55);
+  expect(capped.gate).toBeUndefined();
+  expect(
+    scoreOf(facts({ p1: { kind: "value", value: 0.9 } }), CONFIG).score,
+  ).toBe(90);
+});
+
 test("fill is complete at 90% of a window smaller than fullTokens", () => {
-  // window 200k → full 180k; 140k is half way: 20 + 30 + 20 + 10 = 80
+  // window 200k → full 180k; 140k is half way: 20 + 30 + 10 over 80 = 75
   expect(
     scoreOf(facts({ tokens: 140_000, window: 200_000 }), CONFIG).score,
-  ).toBe(80);
+  ).toBe(75);
 });
 
 test("fill grows from minTokens to fullTokens", () => {
-  // fill .5×40 + 30 + 20 + 10 = 80
-  expect(scoreOf(facts({ tokens: 200_000 }), CONFIG).score).toBe(80);
+  // fill .5×40 + 30 + 10 over 80 = 75
+  expect(scoreOf(facts({ tokens: 200_000 }), CONFIG).score).toBe(75);
 });
 
 test("unknown background or leftovers cap the score at 60", () => {
@@ -93,6 +119,14 @@ test("unknown background or leftovers cap the score at 60", () => {
   expect(scoreOf(facts({ leftovers: { kind: "unknown" } }), CONFIG).score).toBe(
     60,
   );
+});
+
+test("the unseen cap stays below every threshold", () => {
+  // Magic 60 must never read as "can" under a low threshold.
+  const low = configOf({ threshold: 50 });
+  const verdict = scoreOf(signals({ liveCalls: undefined }), low);
+  expect(verdict.caps).toEqual(["background"]);
+  expect(verdict.score).toBeLessThan(low.threshold);
 });
 
 test("with defaults, a suggestion needs known none leftovers", () => {
@@ -107,13 +141,9 @@ const IGNORING = configOf({ ignoreLeftovers: true });
 test("ignored leftovers do not gate, cap or count, and the sum rescales", () => {
   const verdict = scoreOf(facts({ leftovers: LISTED }), IGNORING);
   expect(verdict.gate).toBeUndefined();
-  // fill 1×40 + P1 1×20 + cache 1×10 over 70 → 100
+  // fill 1×40 + cache 1×10 over 50 → 100
   expect(verdict.score).toBe(100);
-  expect(verdict.parts.map((part) => part.name)).toEqual([
-    "fill",
-    "P1",
-    "cache",
-  ]);
+  expect(verdict.parts.map((part) => part.name)).toEqual(["fill", "cache"]);
   const unknown = scoreOf(facts({ leftovers: { kind: "unknown" } }), IGNORING);
   expect(unknown.score).toBe(100);
   expect(unknown.caps).toEqual([]);

@@ -70,6 +70,22 @@ test("the paths the session wrote before a resume still gate", async ($, on) => 
   expect(seen.suggested).toHaveLength(0);
 });
 
+test("git silent over the session's own writes still holds", async ($, on) => {
+  const clock = mock.clock(on);
+  const seen = world(on);
+  seen.calls = [];
+  seen.messages = [WROTE];
+  // No seen.repos entries: git answers nothing anywhere.
+  await $.session.start(START);
+  await measure($, 400_000);
+  await turn($, DONE);
+  await advance(clock, 0);
+  // The Write of x.ts counts; the failed Edit does not; git's silence
+  // never reads as recorded.
+  expect(seen.statuses.at(-1)).toContain("правки не записаны: файлов 1");
+  expect(seen.suggested).toHaveLength(0);
+});
+
 test("a denied agent transcript and a fresh start restore nothing", async ($, on) => {
   const clock = mock.clock(on);
   const seen = world(on);

@@ -28,9 +28,6 @@ const gateWords = (language: Config["language"], gate: Gate): string => {
   const form = formOf(language, count);
   const phrases: Readonly<Record<Gate["kind"], string>> = {
     unread: say(language, "unread"),
-    small: say(language, "small", {
-      k: kOf(gate.kind === "small" ? gate.tokens : 0),
-    }),
     agents: say(language, `agents${form}`, { n: count }),
     calls: say(language, count === 1 ? "callsSingle" : `calls${form}`, {
       n: count,
@@ -153,10 +150,8 @@ const headOf = (drawn: Drawn): readonly string[] => {
       ]
     : [
         `${say(language, "early")}: ${gateWords(language, gate)}`,
-        // The size is the reason itself for these two.
-        ...(gate.kind === "unread" || gate.kind === "small"
-          ? []
-          : sizeOf(language, facts)),
+        // The size is the reason itself for unread tokens.
+        ...(gate.kind === "unread" ? [] : sizeOf(language, facts)),
       ];
 };
 
@@ -176,7 +171,6 @@ const PART_PHRASES: Readonly<Record<Verdict["parts"][number]["name"], Phrase>> =
   {
     fill: "partFill",
     leftovers: "partLeftovers",
-    P1: "partP1",
     cache: "partCache",
   };
 
@@ -190,7 +184,14 @@ const noteOf = (drawn: Drawn): readonly string[] => {
             `- ${say(language, PART_PHRASES[name])}: ${value.toFixed(DECIMALS)} × ${String(weight)}`,
         ),
         ...(config.ignoreLeftovers ? [say(language, "leftoversIgnored")] : []),
-        ...(facts.p1.kind === "na" ? [say(language, "goalNotCounted")] : []),
+        ...(facts.p1.kind === "value" && facts.p1.value < 1
+          ? [
+              say(language, "capGoal", {
+                n: Math.round(facts.p1.value * PERCENT),
+                p: Math.round(facts.p1.value * PERCENT),
+              }),
+            ]
+          : []),
         ...verdict.caps.map((cap) =>
           say(
             language,

@@ -20,7 +20,7 @@ test("a big, finished session scores high, suggests /compact once-toasted", asyn
   await turn($, DONE);
   await advance(clock, 0);
   expect(seen.statuses.at(-1)).toBe(
-    "хороший момент для /compact: оценка 98 из 100 · контекст 400k (40%) · хвостов нет · цель достигнута с вероятностью 90% · кэш тёплый",
+    "хороший момент для /compact: оценка 90 из 100 · контекст 400k (40%) · хвостов нет · цель достигнута с вероятностью 90% · кэш тёплый",
   );
   expect(seen.suggested.at(-1)).toMatch(/^\/compact Keep the goal/u);
   expect(seen.toasts).toHaveLength(1);
@@ -140,8 +140,19 @@ test("a compaction resets the size so a stale score does not stay", async ($, on
   await advance(clock, 0);
   await $.session.compact({ messages: MESSAGES, trigger: "manual" });
   const answer = await $.command.run(RUN);
-  expect(answer.text).toContain("рано: контекст мал (20k)");
+  expect(answer.text).toContain("можно подождать: оценка 0 из 100");
   expect(seen.compactions).toHaveLength(1);
+});
+
+test("tiny turns skip the paid check", async ($, on) => {
+  const clock = mock.clock(on);
+  const seen = world(on);
+  seen.calls = [];
+  await $.session.start(START);
+  await measure($, 20_000);
+  await turn($, DONE);
+  await advance(clock, 0);
+  expect(seen.asked).toHaveLength(0);
 });
 
 test("/compact-advisor explains the score", async ($, on) => {
@@ -153,7 +164,9 @@ test("/compact-advisor explains the score", async ($, on) => {
   await turn($, DONE);
   await advance(clock, 0);
   const answer = await $.command.run(RUN);
-  expect(answer.text).toContain("- цель достигнута: 0.90 × 20");
+  expect(answer.text).toContain(
+    "- потолок 90: цель достигнута с вероятностью 90%",
+  );
   expect(answer.text).toContain("шаблон сохранения");
 });
 
@@ -185,7 +198,7 @@ test("a Kev that never answers times out to P1 n/a", async ($, on) => {
   );
 });
 
-test("a reload turns a P1 left pending into n/a", async ($, on) => {
+test("a reload keeps a P1 left pending: the verdict is still unknown", async ($, on) => {
   const clock = mock.clock(on);
   const seen = world(on);
   seen.kev = "hang";
@@ -195,7 +208,9 @@ test("a reload turns a P1 left pending into n/a", async ($, on) => {
   await turn($, DONE);
   await advance(clock, 0);
   await $.session.start(START);
-  expect(seen.statuses.at(-1)).not.toContain("проверяю");
+  // The hung Kev never settles: the next turn re-asks, until then it holds.
+  expect(seen.statuses.at(-1)).toContain("рано: проверяю, достигнута ли цель");
+  expect(seen.suggested).toHaveLength(0);
 });
 
 test("an agent finishing between turns is seen within 30 s and offers once", async ($, on) => {
@@ -213,7 +228,7 @@ test("an agent finishing between turns is seen within 30 s and offers once", asy
   seen.agents = [];
   await advance(clock, 30_000);
   expect(seen.statuses.at(-1)).toMatch(
-    /^хороший момент для \/compact: оценка 98 /u,
+    /^хороший момент для \/compact: оценка 90 /u,
   );
   expect(seen.suggested).toHaveLength(1);
   await advance(clock, 30_000);

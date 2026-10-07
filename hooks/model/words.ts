@@ -40,10 +40,8 @@ const RU = {
   toastGood: "хороший момент для /compact ({n}): Tab принимает",
   partFill: "заполнение",
   partLeftovers: "хвосты",
-  partP1: "цель достигнута",
   partCache: "кэш",
-  goalNotCounted:
-    "- цель достигнута: не учитывается (вес снят, остальное пересчитано)",
+  capGoal: "- потолок {n}: цель достигнута с вероятностью {p}%",
   leftoversIgnored:
     "- хвосты: не учитываются по настройке (вес снят, остальное пересчитано)",
   capBackground:
@@ -94,10 +92,8 @@ const EN: Readonly<Record<keyof typeof RU, string>> = {
   toastGood: "good moment to /compact ({n}): Tab takes it",
   partFill: "context fill",
   partLeftovers: "leftovers",
-  partP1: "goal reached",
   partCache: "cache",
-  goalNotCounted:
-    "- goal reached: not counted (weight removed, the rest rescaled)",
+  capGoal: "- capped at {n}: goal reached with {p}% probability",
   leftoversIgnored:
     "- leftovers: not counted by setting (weight removed, the rest rescaled)",
   capBackground:
