@@ -1,4 +1,5 @@
 node_modules/
+.worktrees/
 .claude-plugin/types/
 .DS_Store
 evals/results/

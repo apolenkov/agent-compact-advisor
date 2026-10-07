@@ -21,7 +21,10 @@ agent-compact-advisor needs Claude Code 2.1.287+ (mods are on by default). Try i
   `claude plugin test`. No network in tests (Kev is mocked through `http.fetch`).
 - [Conventional Commits](https://www.conventionalcommits.org) with a scope:
   `agent-compact-advisor`, `repo`, `deps`, `ci`, `main`. Releases are cut by release-please.
-- After a Claude Code update: `npm run update-types`, then `npm run check`.
+- After a Claude Code update: run `/plugin-authoring` with the pinned engine,
+  then `npm run update-types` and `npm run check`. The updater requires that
+  version's complete declarations, including the builtin tool tables; the
+  runtime's beside-plugin copy omits them.
 
 `npm run lint` lints the pure model in its own ESLint process: eslint-plugin-functional
 caches type immutability per type, not per rule level, so linting `hooks/` (lite) and
@@ -51,6 +54,6 @@ with a login in CI).
 
 ## Dependency holds
 
-- `typescript` stays on 6.x (6.0.3): `typescript-eslint` 8.71.0, its latest,
+- `typescript` stays on 6.x (6.0.3): `typescript-eslint` 8.71.1, its latest,
   declares the peer `typescript >=4.8.4 <6.1.0`. Take TypeScript 7 once it widens
   that range; drop the Dependabot `ignore` for `typescript` then.

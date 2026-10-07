@@ -31,7 +31,7 @@ test("the request is cheap and bounded, the answer a clipped tail in markers", (
     maxTokens: 8,
     timeoutMs: 15_000,
   });
-  expect(request.prompt.startsWith("<<<ANSWER\n")).toBe(true);
-  expect(request.prompt.endsWith("END\nANSWER>>>")).toBe(true);
+  expect(request.prompt).toMatch(/^<<<ANSWER\n/u);
+  expect(request.prompt).toMatch(/END\nANSWER>>>$/u);
   expect(request.prompt.length).toBeLessThan(6100);
 });
