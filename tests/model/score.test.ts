@@ -66,9 +66,12 @@ test("P1 not available removes its weight and rescales", () => {
   ]);
 });
 
-test("P1 pending counts 0 with its weight kept", () => {
-  // 40 + 30 + 0 + 10 = 80
-  expect(scoreOf(facts({ p1: { kind: "pending" } }), CONFIG).score).toBe(80);
+test("P1 pending blocks: the priority verdict has not arrived", () => {
+  // Unfinished work is a gate, not 0 points: no fill compensates it.
+  expect(scoreOf(facts({ p1: { kind: "pending" } }), CONFIG)).toMatchObject({
+    score: 0,
+    gate: { kind: "p1" },
+  });
 });
 
 test("fill is complete at 90% of a window smaller than fullTokens", () => {

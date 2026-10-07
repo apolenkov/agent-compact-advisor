@@ -41,6 +41,7 @@ const gateWords = (language: Config["language"], gate: Gate): string => {
     unpushed: say(language, "unpushed", { n: count }),
     checking: say(language, "checking"),
     owes: say(language, "owes"),
+    p1: say(language, "goalPending"),
     leftovers: say(language, "leftovers", {
       text: gate.kind === "leftovers" ? gate.text : "",
     }),

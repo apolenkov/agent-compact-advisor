@@ -46,7 +46,8 @@ export type Gate =
   | Readonly<{ kind: "unpushed"; count: number }>
   | Readonly<{ kind: "leftovers"; text: string }>
   | Readonly<{ kind: "checking" }>
-  | Readonly<{ kind: "owes" }>;
+  | Readonly<{ kind: "owes" }>
+  | Readonly<{ kind: "p1" }>;
 
 /** What caps the score at 60: something the advisor cannot see. */
 type Cap = "background" | "leftovers";
@@ -113,6 +114,9 @@ const gateOf = (signals: Signals, config: Config): Gate | undefined => {
     ...recordGates(signals.unrecorded),
     ...leftoverGates(facts, config),
     ...checkGates(facts),
+    // Kev's priority verdict has not arrived: unfinished work is a gate,
+    // never 0 points a high fill could compensate.
+    facts.p1.kind === "pending" && { kind: "p1" as const },
   ];
   return gates.find((gate) => gate !== false);
 };
