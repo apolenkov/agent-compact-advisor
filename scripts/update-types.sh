@@ -5,6 +5,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 dst=engine-types/claude-code.d.ts
+version=$(node -p 'require("./package.json").devDependencies["@anthropic-ai/claude-code"]')
 # /tmp is shared: take the newest candidate that is a regular file, not a symlink,
 # and really lives where the engine writes (/private/tmp resolves to /tmp on macOS).
 src=
@@ -19,10 +20,17 @@ for f in $candidates; do
     /private/tmp/claude-*/bundled-skills/*/plugin-authoring/types/claude-code.d.ts | /tmp/claude-*/bundled-skills/*/plugin-authoring/types/claude-code.d.ts | "$PWD"/.claude-plugin/types/claude-code/index.d.ts) ;;
     *) continue ;;
   esac
-  [ -f "$f" ] && [ ! -L "$f" ] && { src=$f; break; }
+  [ -f "$f" ] && [ ! -L "$f" ] || continue
+  [ "$(head -n 1 "$f")" = "// Written by Claude Code $version." ] || continue
+  # The runtime's beside-plugin copy omits the builtin tool tables. Keep
+  # their typed contracts: incomplete declarations also caused ESLint OOM
+  # during the SDK update. The authoring skill writes the complete copy.
+  grep -q '^[[:space:]]*Bash: {' "$f" || continue
+  src=$f
+  break
 done
 unset IFS
-[ -n "$src" ] || { echo "no declarations found: run /plugin-authoring in a Claude Code session first" >&2; exit 1; }
+[ -n "$src" ] || { echo "no complete declarations for $version: run /plugin-authoring with the pinned Claude Code first" >&2; exit 1; }
 if [ -n "$(git status --porcelain -- "$dst" 2>/dev/null)" ]; then
   echo "warning: $dst has uncommitted changes, overwriting" >&2
 fi

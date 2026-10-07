@@ -10,8 +10,8 @@
 set -eu
 repo=$(cd "$(dirname "$0")/.." && pwd)
 session=ccasmoke$$
-project=/tmp/cca-smoke
-home=/tmp/cca-smoke-home
+project=$(mktemp -d /tmp/cca-smoke.XXXXXX)
+home=$(mktemp -d /tmp/cca-smoke-home.XXXXXX)
 
 screen() { tmux capture-pane -t "$session" -p -J; }
 

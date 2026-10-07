@@ -5,6 +5,9 @@
 
 ![Claude Code session: a small turn reads "too early: context is small (35k)"; after a turn that reads four log files the status line alerts "context 63% — time to compact" although the score is only 66 of 100, the ready /compact appears in the prompt box, Tab takes it, and after the compaction the line resets to "context is small"](demo/demo.gif)
 
+This recording predates the logical gates: a small context now has score 0
+without a size gate, and the size alert never offers `/compact` through a gate.
+
 [![ci](https://github.com/apolenkov/agent-compact-advisor/actions/workflows/ci.yml/badge.svg)](https://github.com/apolenkov/agent-compact-advisor/actions/workflows/ci.yml)
 [![codeql](https://github.com/apolenkov/agent-compact-advisor/actions/workflows/codeql.yml/badge.svg)](https://github.com/apolenkov/agent-compact-advisor/actions/workflows/codeql.yml)
 [![release](https://img.shields.io/github/v/release/apolenkov/agent-compact-advisor?sort=semver)](https://github.com/apolenkov/agent-compact-advisor/releases)
@@ -39,8 +42,8 @@ agent-compact-advisor: контекст 61% — пора компактить ·
 - 🚨 **Size alert** from `alertPercent` (60) of the window, whatever the score,
   the gates or the leftovers: the line opens with "контекст 61% — пора
   компактить", one toast per crossing (it re-arms when the share drops, e.g.
-  after a compaction), the `/compact` suggested at each turn end (not while
-  agents or background calls run).
+  after a compaction), the `/compact` suggested at each turn end only when no
+  gate holds.
 - 💡 **Suggestion** past the threshold (70): a ready one-line `/compact …` in
   the empty prompt box, Tab takes it; one toast when the score first crosses.
 - 🔎 **Judges from the session's history**, not from the size: running
@@ -85,26 +88,32 @@ Or try a checkout: `claude --plugin-dir /path/to/agent-compact-advisor`.
 A score, not a probability: nothing is calibrated.
 
 Gates set it to 0, and the line says which in words: no context reading yet,
-context under `minTokens` (100k), running agents, live background work,
+running agents, live background work,
 background work that hung ("stop it"), a runner that ended with its verdict
 unread, changes in the repositories the session touched that no commit or push
 holds (read from git), or leftovers the agent itself listed in the last answer
-(unless `ignoreLeftovers`). A question to the owner (the second leftover line)
+(unless `ignoreLeftovers`), a pending priority verdict, a pending model check
+or work the model found still owed. An owed result persists across turns until
+another model check replaces it. A question to the owner (the second leftover line)
 is no gate: the compaction template carries it.
-Otherwise it is a weighted sum:
+Otherwise the score measures how worthwhile compaction is, using a weighted sum.
+A known context under `minTokens` (100k) has score 0 without a size gate:
 
 | Part      | Weight | Value                                                                            |
 | --------- | ------ | -------------------------------------------------------------------------------- |
 | fill      | 40     | from `minTokens` to `min(fullTokens, 90% of the window)`                         |
 | leftovers | 30     | 1 when the last answer's leftover lines all say none                             |
-| P1        | 20     | Kev's done-signal; 0 while asked; weight removed when Kev is off or down         |
 | cache     | 10     | 1 within `cacheTtlMin` of the last turn (the compaction reads the cached prefix) |
 
-It is capped at 60 while background work is unknown (agent-shell-watch not
-loaded) or the last answer has no leftover lines, so a suggestion needs both
-known. With `ignoreLeftovers` the leftovers part leaves the sum (the rest is
-rescaled, as for an absent P1) and never gates or caps: for a coordinator
-session, whose leftovers always say "wait for the others".
+Kev's probability is a ceiling, not a weighted part: 0.55 caps the score at 55.
+A pending verdict gates, including after a reload; an unavailable verdict
+adds no ceiling. Unknown background work (agent-shell-watch not loaded) or
+missing leftover lines cap the score at the lower of 60 and `threshold - 1`.
+The size alert remains a separate trigger when no gate holds.
+With `ignoreLeftovers` the leftovers part leaves the sum (the rest is
+rescaled) and never gates or caps: for a coordinator session, whose leftovers
+always say "wait for the others". Running agents, background work and
+unrecorded changes still gate independently of that setting.
 
 **Leftovers** are read from lines starting with `Хвосты для агента:` and
 `Хвосты для владельца:` (the last of each counts; list marks, quotes, bold and
@@ -141,11 +150,13 @@ on the upstream (or on any remote). Untracked files count only when the session
 wrote them. At a resume the list is rebuilt from the transcript — the main
 loop's rows and the agents' an Agent call names, up to a bounded depth — so a
 file written before the resume still counts. When git says nothing the line
-never claims "everything recorded".
+never claims "everything recorded"; if the session touched files, they
+conservatively count as unrecorded until git supplies a state.
 
 **What it cannot see.** Changes made by another process between turns show at
 the next turn; files outside any repository are listed for the compaction
-template but never gate; a promise deeper than the answer's last 6000
+template and can count in the conservative gate when git supplies no state;
+a promise deeper than the answer's last 6000
 characters is beyond the model check; a subagent's transcript stores no tool
 records, so what its Bash calls changed is lost to a resume; a squash-merged
 branch counts as recorded only when its upstream is gone and every path it

@@ -4,7 +4,7 @@ version: 2
 updates:
   - package-ecosystem: npm
     directory: /
-    # typescript-eslint supports TypeScript < 6.1 only; take a new TypeScript
+    # typescript-eslint 8.71.1 supports TypeScript < 6.1 only; take a new TypeScript
     # major once it does.
     ignore:
       - dependency-name: typescript
