@@ -34,6 +34,29 @@ agent-compact-advisor needs Claude Code 2.1.287+ (mods are on by default). Try i
 caches type immutability per type, not per rule level, so linting `hooks/` (lite) and
 `hooks/model/` (strict) in one process would make the result depend on file order.
 
+## Repository layout and publication
+
+- `hooks/` contains runtime hooks; `hooks/model/` is the pure decision model.
+  `tests/` owns behavior checks and `evals/` owns live evaluation cases.
+- `.claude-plugin/plugin.json` declares the plugin, `types/index.d.ts` declares
+  its public types, and `engine-types/` retains the SDK declarations and their
+  provenance. `scripts/` contains the existing validation and live-check tools.
+- README, CONTRIBUTING and SECURITY describe usage, development and data
+  boundaries. `openspec/` records requirements and their changes.
+- Git source includes the tracked implementation, tests, tooling and documents.
+  Release Please creates release changes and tags through the existing GitHub
+  workflow. The root npm manifest is private tooling configuration; it does not
+  define an npm publication or a separate compiled `dist/` product.
+- `.worktrees/`, `.superpowers/`, `node_modules/`, raw `evals/results/` and local
+  credentials remain outside tracked source. Ignore rules do not remove files
+  already tracked: inspect the index before declaring a publication boundary
+  safe. Preserve unique session handoffs outside tracked source in the owner's
+  durable handoff directory.
+
+Before changing these paths or rules, check active sessions and worktrees with
+the coordinator and assign one owner to each changed file. Keep source checks,
+release delivery and observed live behavior as separate results.
+
 ## Live checks
 
 `npm run eval` runs `claude plugin eval` over `evals/`: each case is a real

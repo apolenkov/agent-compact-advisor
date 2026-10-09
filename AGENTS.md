@@ -17,3 +17,8 @@ Read [README.md](README.md), [CONTRIBUTING.md](CONTRIBUTING.md) and
 - Use an allowed Conventional Commit scope, such as `docs(repo): ...`, and the
   existing hooks. Release and factory automation follow CONTRIBUTING and its ADRs;
   a review finding alone does not authorize extending the change or merging it.
+- Before editing, check active sessions and worktrees with the coordinator and
+  agree file ownership. Preserve another session's changes and check snapshots.
+- Follow CONTRIBUTING's repository layout and publication boundaries. Keep
+  worktrees, process notes, raw eval results and credentials out of tracked
+  source; retain unique handoffs in the owner's durable handoff directory.

@@ -11,6 +11,9 @@ evals/results/
 .npmrc
 secrets.*
 
+# Local agent process notes are not part of the plugin source.
+/.superpowers/
+
 # OpenSpec native adapters: regenerate with openspec init; preserve vendor bytes.
 /.agents/skills/openspec-*/
 /.agents/skills/.openspec-target
