@@ -7,6 +7,10 @@ npm ci            # installs tooling and the git hooks (lefthook)
 npm run check     # format, typecheck, lint, repo lint, validate, tests
 ```
 
+CI follows the latest Node 26 release through `.nvmrc` and installs npm 12.2.0.
+For matching local checks, use Node 26.11.1 and npm 12.2.0 (verified 2026-10-09)
+with a local runtime or an existing version manager.
+
 agent-compact-advisor needs Claude Code 2.1.287+ (mods are on by default). Try it live with
 `claude --plugin-dir .` from the repository root.
 
@@ -29,6 +33,29 @@ agent-compact-advisor needs Claude Code 2.1.287+ (mods are on by default). Try i
 `npm run lint` lints the pure model in its own ESLint process: eslint-plugin-functional
 caches type immutability per type, not per rule level, so linting `hooks/` (lite) and
 `hooks/model/` (strict) in one process would make the result depend on file order.
+
+## Repository layout and publication
+
+- `hooks/` contains runtime hooks; `hooks/model/` is the pure decision model.
+  `tests/` owns behavior checks and `evals/` owns live evaluation cases.
+- `.claude-plugin/plugin.json` declares the plugin, `types/index.d.ts` declares
+  its public types, and `engine-types/` retains the SDK declarations and their
+  provenance. `scripts/` contains the existing validation and live-check tools.
+- README, CONTRIBUTING and SECURITY describe usage, development and data
+  boundaries. `openspec/` records requirements and their changes.
+- Git source includes the tracked implementation, tests, tooling and documents.
+  Release Please creates release changes and tags through the existing GitHub
+  workflow. The root npm manifest is private tooling configuration; it does not
+  define an npm publication or a separate compiled `dist/` product.
+- `.worktrees/`, `.superpowers/`, `node_modules/`, raw `evals/results/` and local
+  credentials remain outside tracked source. Ignore rules do not remove files
+  already tracked: inspect the index before declaring a publication boundary
+  safe. Preserve unique session handoffs outside tracked source in the owner's
+  durable handoff directory.
+
+Before changing these paths or rules, check active sessions and worktrees with
+the coordinator and assign one owner to each changed file. Keep source checks,
+release delivery and observed live behavior as separate results.
 
 ## Live checks
 
@@ -55,5 +82,6 @@ with a login in CI).
 ## Dependency holds
 
 - `typescript` stays on 6.x (6.0.3): `typescript-eslint` 8.71.1, its latest,
-  declares the peer `typescript >=4.8.4 <6.1.0`. Take TypeScript 7 once it widens
+  declares the peer `typescript >=4.8.4 <6.1.0` (registry verified 2026-10-09).
+  TypeScript 7.0.2 is outside that range. Take TypeScript 7 once it widens
   that range; drop the Dependabot `ignore` for `typescript` then.

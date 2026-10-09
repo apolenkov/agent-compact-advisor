@@ -27,11 +27,19 @@ export interface AdvisorFacts {
   /** The model's check of the last answer; it only ever adds a gate. */
   readonly promise?: Checked;
   readonly turnId?: string;
+  /** A started main turn holds proposals until that same turn completes. */
+  readonly isTurnComplete?: boolean;
   readonly lastTurnAt?: number;
   /** Whether the last score drawn stood at the threshold or above. */
   readonly wasAbove: boolean;
   /** Whether the context share stood at the alert percent or above. */
   readonly wasAlerted: boolean;
+  /** The most recent crossing receipt, independent of turn suggestions. */
+  readonly crossing?: Readonly<{ nonce: string; toast: string }>;
+  /** The completed turn whose suggestion was last admitted, including after reload. */
+  readonly suggestedTurnId?: string;
+  /** The nonce of the draw which admitted that turn's suggestion. */
+  readonly suggestionClaimer?: string;
 }
 
 /** The model's check of one turn's answer: pending until it answers, `na` when it could not. */
@@ -54,7 +62,12 @@ export interface WatchedCall {
 export interface Recorded {
   readonly at: number;
   readonly value:
-    { readonly files: number; readonly commits: number } | undefined;
+    | {
+        readonly files: number;
+        /** Commits made, not pushed; undefined when git could not say. */
+        readonly commits: number | undefined;
+      }
+    | undefined;
   /** Absolute paths the session's tools wrote to, newest last. */
   readonly touched: readonly string[];
 }

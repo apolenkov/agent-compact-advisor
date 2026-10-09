@@ -62,15 +62,17 @@ const isNone = (value: string, rule: LeftoverRule): boolean =>
  * @param rule the prefixes and the words that mean none
  * @returns none when every line found says none, listed with the first other
  *   value (`isOwner` when only owner lines list something), unknown when no
- *   line was found
+ *   line was found or any found value is blank (unless a listed value wins)
  */
 export const leftoversOf = (answer: string, rule: LeftoverRule): Leftovers => {
   const values = valuesOf(answer, rule);
   const listed = values
     .map((value, index) => ({ value, index }))
-    .find(({ value }) => value !== undefined && !isNone(value, rule));
+    .find(
+      ({ value }) =>
+        value !== undefined && value !== "" && !isNone(value, rule),
+    );
   const kinds: readonly (readonly [boolean, Leftovers])[] = [
-    [values.every((value) => value === undefined), { kind: "unknown" }],
     [
       listed?.value !== undefined,
       {
@@ -78,6 +80,10 @@ export const leftoversOf = (answer: string, rule: LeftoverRule): Leftovers => {
         text: cut(listed?.value ?? ""),
         ...((listed?.index ?? 0) > 0 && { isOwner: true }),
       },
+    ],
+    [
+      values.every((value) => value === undefined) || values.includes(""),
+      { kind: "unknown" },
     ],
   ];
   return kinds.find(([isMet]) => isMet)?.[1] ?? { kind: "none" };

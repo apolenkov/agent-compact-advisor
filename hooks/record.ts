@@ -3,14 +3,23 @@
  * follows `$` only inside the file that holds it, and the advisor's main
  * module reads these two states instead.
  */
-import type { EngineInterface, On, SessionMessage } from "claude-code";
+import type {
+  EngineInterface,
+  HookFor,
+  MatchedHook,
+  Registration,
+  SessionMessage,
+} from "claude-code";
 import { atom, read, update } from "claude-code";
 
 import type { Recorded } from "../types";
-import type { Unrecorded } from "./model/score.ts";
 import { pathsOf, withTouched } from "./model/touched.ts";
 import {
+  canChangeFiles,
+  directoryOf,
+  recordsOf,
   type RepositoryState,
+  rootsOf,
   sumOf,
   unrecordedIn,
 } from "./model/unrecorded.ts";
@@ -18,8 +27,19 @@ import { orElse, quietly } from "./quietly.ts";
 
 type Engine = Readonly<EngineInterface>;
 
-const ROOTS_MAX = 6;
-const GIT_TIMEOUT_MS = 5000;
+type StartMatcher = Readonly<{ cwd: RegExp }>;
+type StartHook = MatchedHook<"session.start", StartMatcher>;
+interface RecordOn {
+  (
+    ...args: Readonly<["session.start", StartMatcher, StartHook]>
+  ): Registration<StartHook>;
+  <P extends "tool.call" | "turn.start">(
+    pattern: P,
+    hook: HookFor<P>,
+  ): Registration<HookFor<P>>;
+}
+
+const GIT = { rootsMax: 6, timeoutMs: 5000 } as const;
 
 const recordedAtom = atom(
   { plugin: "agent-compact-advisor", key: "recorded" } as const,
@@ -30,9 +50,6 @@ const recordedAtom = atom(
   } satisfies Recorded,
 );
 
-const directoryOf = (path: string): string =>
-  path.slice(0, path.lastIndexOf("/"));
-
 const gitIn = async (
   $: Engine,
   cwd: string,
@@ -41,20 +58,12 @@ const gitIn = async (
   try {
     const ran = await $.process.run(["git", ...args], {
       cwd,
-      timeoutMs: GIT_TIMEOUT_MS,
+      timeoutMs: GIT.timeoutMs,
     });
     return ran.exitCode === 0 ? ran.stdout : undefined;
   } catch {
     return undefined;
   }
-};
-
-const rootOf = async ($: Engine, path: string): Promise<string | undefined> => {
-  const top = await gitIn($, directoryOf(path), [
-    "rev-parse",
-    "--show-toplevel",
-  ]);
-  return top?.trim();
 };
 
 const lineOf = async (
@@ -65,6 +74,9 @@ const lineOf = async (
   const out = await gitIn($, root, args);
   return out?.trim();
 };
+
+const rootOf = async ($: Engine, path: string): Promise<string | undefined> =>
+  lineOf($, directoryOf(path), ["rev-parse", "--show-toplevel"]);
 
 // The trunk of origin and the merge-base with it, when the branch has left
 // its upstream (tracked once, now gone).
@@ -139,11 +151,11 @@ const stateOf = async (
   $: Engine,
   root: string,
 ): Promise<RepositoryState | undefined> => {
-  const status = await gitIn($, root, ["status", "--porcelain"]);
+  const status = await gitIn($, root, ["status", "--porcelain", "-z"]);
   return status === undefined
     ? undefined
     : {
-        status: status.split("\n").filter((line) => line !== ""),
+        status: recordsOf(status),
         ahead: await aheadOf($, root),
       };
 };
@@ -153,24 +165,21 @@ const unrecordedOf = async (
   $: Engine,
   cwd: string,
   touched: readonly string[],
-): Promise<Unrecorded | undefined> => {
+): Promise<Recorded["value"]> => {
+  // Git is asked once per directory, not once per written path.
   const found = await Promise.all(
-    [`${cwd}/.`, ...touched].map((path) => rootOf($, path)),
+    [...new Set(Array.from([`${cwd}/.`, ...touched], directoryOf))].map(
+      async (directory) =>
+        [directory, await rootOf($, `${directory}/.`)] as const,
+    ),
   );
-  const roots = [...new Set(found.filter((root) => root !== undefined))].slice(
-    0,
-    ROOTS_MAX,
+  const { roots, isIncomplete } = rootsOf(found, touched, GIT.rootsMax);
+  const parts = await Promise.all(
+    roots
+      .slice(0, GIT.rootsMax)
+      .map(async (root) => unrecordedIn(root, await stateOf($, root), touched)),
   );
-  const states = await Promise.all(
-    roots.map(async (root) => ({ root, state: await stateOf($, root) })),
-  );
-  const known = states.filter(
-    (one): one is { root: string; state: RepositoryState } =>
-      one.state !== undefined,
-  );
-  return known.length === 0
-    ? undefined
-    : sumOf(known.map(({ root, state }) => unrecordedIn(root, state, touched)));
+  return parts.length === 0 ? undefined : sumOf(parts, isIncomplete);
 };
 
 const refresh = async ($: Engine): Promise<void> => {
@@ -264,15 +273,6 @@ const restoreTouched = async ($: Engine): Promise<void> => {
   await quietly(refresh($));
 };
 
-// A tool that can change files or commit: git is asked after it.
-const CHANGERS = new Set([
-  "Bash",
-  "Edit",
-  "Write",
-  "NotebookEdit",
-  "MultiEdit",
-]);
-
 /**
  * Wires the touched-paths and git hooks; the main module calls it. Git is
  * asked at each turn start and after each tool that can change files, so the
@@ -280,7 +280,7 @@ const CHANGERS = new Set([
  * between turns shows at the next turn.
  * @param on the registrar
  */
-export const recordHooks = (on: On): void => {
+export const recordHooks = (on: RecordOn): void => {
   on("session.start", { cwd: /.+/u }, async ($, e, next) => {
     await restoreTouched($);
     return next(e);
@@ -296,7 +296,7 @@ export const recordHooks = (on: On): void => {
             touched: withTouched(held.touched, paths),
           })),
     );
-    await quietly(CHANGERS.has(e.tool) ? refresh($) : Promise.resolve());
+    await quietly(canChangeFiles(e.tool) ? refresh($) : Promise.resolve());
     return outcome;
   });
   on("turn.start", async ($, e, next) => {

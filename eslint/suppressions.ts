@@ -21,6 +21,8 @@ const NEVER_SUPPRESSED = [
   "functional/no-let",
   "max-lines",
   "max-lines-per-function",
+  "max-params",
+  "max-depth",
   "complexity",
   "sonarjs/cognitive-complexity",
 ] as const;

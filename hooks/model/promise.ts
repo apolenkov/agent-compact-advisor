@@ -71,13 +71,16 @@ export const requestOf = (answer: string): Readonly<ModelCompleteRequest> => ({
   timeoutMs: 15_000,
 });
 
+// Marker text inside the answer is neutralized: it cannot end the span early.
+const NEUTRAL = /<<<ANSWER|ANSWER>>>/gu;
+
 /**
  * The message the model reads.
  * @param answer the agent's final answer of the turn
  * @returns the answer clipped to its tail, between markers
  */
 const promptOf = (answer: string): string =>
-  `<<<ANSWER\n${answer.slice(-CLIP)}\nANSWER>>>`;
+  `<<<ANSWER\n${answer.slice(-CLIP).replaceAll(NEUTRAL, "[ANSWER]")}\nANSWER>>>`;
 
 /**
  * The label in a reply.

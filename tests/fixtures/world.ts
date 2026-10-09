@@ -1,9 +1,40 @@
 import type {
   AgentInfo,
-  On,
+  HookFor,
+  MatchedHook,
   ProcessRunResult,
+  Registration,
   SessionMessage,
 } from "claude-code";
+
+type WorldEvent =
+  | "session.start"
+  | "session.root"
+  | "turn.start"
+  | "tool.call"
+  | "process.run"
+  | "command.register"
+  | "ui.status"
+  | "ui.toast"
+  | "prompt.suggest"
+  | "agent.list"
+  | "session.messages"
+  | "http.fetch"
+  | "model.complete"
+  | "session.measure"
+  | "turn.complete"
+  | "session.compact";
+type ShellMatcher = Readonly<{ plugin: "agent-shell-watch" }>;
+type ShellHook = MatchedHook<"state.get", ShellMatcher>;
+interface WorldOn {
+  (
+    ...args: Readonly<["state.get", ShellMatcher, ShellHook]>
+  ): Registration<ShellHook>;
+  <P extends WorldEvent>(
+    pattern: P,
+    hook: HookFor<P>,
+  ): Registration<HookFor<P>>;
+}
 
 // A promise that never settles: Boolean is a non-empty executor that ignores it.
 const NEVER = new Promise<never>(Boolean);
@@ -20,6 +51,8 @@ export interface World {
   /** Kev's P1 answer, undefined for Kev down, "hang" for no answer ever. */
   kev: number | "hang" | undefined;
   agents: AgentInfo[];
+  /** Optional controlled delay of the external watcher read, after its value is captured. */
+  callsRead?: (() => Promise<void>) | undefined;
   /** agent-shell-watch's calls, undefined when it is not installed. */
   calls:
     | {
@@ -31,7 +64,7 @@ export interface World {
       }[]
     | undefined;
   /**
-   * What git says per repository root (its `status --porcelain` lines and the
+   * What git says per repository root (its raw porcelain records and the
    * commits ahead); no entry for a directory means it is no repository.
    */
   repos: Record<string, Repository>;
@@ -43,6 +76,8 @@ export interface World {
   messages: SessionMessage[];
   /** An agent's rows, or the `{ deny }` shape a denied transcript returns. */
   agentMessages: Record<string, SessionMessage[] | { deny: string }>;
+  /** Every process the plugin ran: its cwd and argv. */
+  readonly runs: { cwd: string; argv: readonly string[] }[];
 }
 
 /**
@@ -53,7 +88,12 @@ export interface World {
  */
 export interface Repository {
   status: string[];
-  ahead: number;
+  /** Exact stdout bytes, including NUL-separated rename/copy source fields. */
+  statusRaw?: string;
+  /** Failure of a discovered repository's status, including a process timeout. */
+  statusFailure?: "exit" | "timeout";
+  /** Commits ahead; left out, rev-list fails as it does when git cannot say. */
+  ahead?: number;
   branch?: { upstream: "gone" | "none"; trunkDiff: string };
 }
 
@@ -96,17 +136,27 @@ const branchAnswer = (
   return answers[kindOf(argv)];
 };
 
+const statusOf = (
+  repository: Repository | undefined,
+  separator: string,
+): string =>
+  repository?.statusRaw ??
+  (repository?.status ?? []).map((line) => `${line}${separator}`).join("");
+
 const plainAnswer = (
   root: string,
   repository: Repository | undefined,
-  verb: string,
+  argv: readonly string[],
 ): ProcessRunResult => {
+  const verb = argv[1] ?? "";
   const answers: Readonly<Record<string, string>> = {
     "rev-parse": `${root}\n`,
-    status: (repository?.status ?? []).map((line) => `${line}\n`).join(""),
+    status: statusOf(repository, argv.includes("-z") ? "\0" : "\n"),
     "rev-list": `${String(repository?.ahead ?? 0)}\n`,
   };
-  return repository === undefined
+  return repository === undefined ||
+    (verb === "rev-list" && repository.ahead === undefined) ||
+    (verb === "status" && repository.statusFailure === "exit")
     ? done(128, "")
     : done(0, answers[verb] ?? "");
 };
@@ -116,7 +166,7 @@ const processAnswer = (
   repository: Repository | undefined,
   argv: readonly string[] = [],
 ): { value: ProcessRunResult } => {
-  const plain = plainAnswer(root, repository, argv[1] ?? "");
+  const plain = plainAnswer(root, repository, argv);
   const branched = repository?.branch && branchAnswer(repository.branch, argv);
   return { value: branched ?? plain };
 };
@@ -126,7 +176,7 @@ const processAnswer = (
  * @param on the test's registrar
  * @returns the world, to assert on and to steer
  */
-export const world = (on: On): World => {
+export const world = (on: WorldOn): World => {
   const seen: World = {
     statuses: [],
     toasts: [],
@@ -141,23 +191,27 @@ export const world = (on: On): World => {
     asked: [],
     messages: [],
     agentMessages: {},
+    runs: [],
   };
-  on("state.get", { plugin: "agent-shell-watch" }, () => ({
-    value:
-      seen.calls === undefined
-        ? { value: undefined, version: 0 }
-        : { value: seen.calls, version: 1 },
-  }));
+  on("state.get", { plugin: "agent-shell-watch" }, async () => {
+    const calls = seen.calls;
+    await seen.callsRead?.();
+    return { value: { value: calls, version: calls === undefined ? 0 : 1 } };
+  });
   on("session.start", (_$, e) => ({ cwd: e.cwd }));
   on("session.root", () => ({ value: "/w" }));
   on("turn.start", (_$, e) => ({ turnId: e.turnId }));
   on("tool.call", () => ({ result: {}, text: "ok" }));
   on("process.run", (_$, e) => {
     const cwd = e.init?.cwd ?? "/w";
+    seen.runs.push({ cwd, argv: e.argv });
     const root = Object.keys(seen.repos).find(
       (one) => cwd === one || cwd.startsWith(`${one}/`),
     );
     const repository = root === undefined ? undefined : seen.repos[root];
+    if (e.argv[1] === "status" && repository?.statusFailure === "timeout") {
+      throw new Error("process timed out");
+    }
     return processAnswer(root, repository, e.argv);
   });
   on("command.register", (_$, e) => ({ value: { command: e.name } }));

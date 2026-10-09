@@ -5,7 +5,6 @@
  * conversation. It never compacts and never cancels a compaction.
  */
 import type {
-  EngineInterface,
   Register,
   SessionCompactInput,
   TurnCompleteInput,
@@ -15,15 +14,17 @@ import { atom, read, update } from "claude-code";
 import type { AdvisorFacts, Checked, Recorded } from "../types";
 import { type Calls, heldCallsOf } from "./model/calls.ts";
 import { type Config, configOf } from "./model/config.ts";
-import { drawnFrom } from "./model/drawn.ts";
+import { drawnFrom, type Read } from "./model/drawn.ts";
 import { type Drawn, explanationOf, statusLineOf } from "./model/format.ts";
 import { kevBodyOf, noulOf } from "./model/kev.ts";
 import { offerOf } from "./model/offer.ts";
-import { isAsked, isCheckable, labelOf, requestOf } from "./model/promise.ts";
+import { labelOf, requestOf } from "./model/promise.ts";
 import {
+  begun,
   carryOf,
   checked,
   isGuarded,
+  isReadyToCheck,
   offered,
   p1Settled,
   restarted,
@@ -32,8 +33,7 @@ import {
 import { SUGGESTION, withTemplate } from "./model/template.ts";
 import { orElse, quietly } from "./quietly.ts";
 import { recordHooks } from "./record.ts";
-
-type Engine = Readonly<EngineInterface>;
+import type { AdvisorOn, Engine } from "./registrar.ts";
 
 const COMMAND = "compact-advisor";
 const factsAtom = atom(
@@ -46,6 +46,8 @@ const factsAtom = atom(
   } satisfies AdvisorFacts,
 );
 // What the session wrote and what git says of it: hooks/record.ts keeps it.
+// The engine's scan lists state a file reads, so the atom is declared again —
+// one key, one cell, two declaration sites the engine can see.
 const recordedAtom = atom(
   { plugin: "agent-compact-advisor", key: "recorded" } as const,
   {
@@ -102,54 +104,58 @@ const settleCheck = async (
   config: Config,
   turn: Readonly<{ id: string; answer: string }>,
 ): Promise<void> => {
-  await quietly(draw($, config, true));
+  await quietly(draw($, config, turn.id));
   const state = await askModel($, turn.answer);
   await update($, factsAtom, (facts) => checked(facts, turn.id, state));
 };
 
 // agent-shell-watch writes its calls at every session start: a value never
 // written means it is not installed, so background work is unknown.
-const callsStateOf = async ($: Engine): Promise<Calls | undefined> => {
-  return orElse(
-    (async () => heldCallsOf(await $.state.get(watchCalls)))(),
-    undefined,
-  );
-};
+const callsStateOf = async ($: Engine): Promise<Calls | undefined> =>
+  orElse((async () => heldCallsOf(await $.state.get(watchCalls)))(), undefined);
 
 const runningAgentsOf = async ($: Engine): Promise<number> => {
   const agents = await orElse($.agent.list(), []);
   return agents.filter((agent) => agent.status === "running").length;
 };
 
-const drawnOf = async ($: Engine, config: Config): Promise<Drawn> => {
-  return drawnFrom(
-    {
-      facts: await read($, factsAtom),
-      calls: await callsStateOf($),
-      recorded: await read($, recordedAtom),
-      runningAgents: await runningAgentsOf($),
-      now: await $.clock.now(),
-    },
-    config,
-  );
-};
+const readOf = async ($: Engine): Promise<Read> => ({
+  facts: await read($, factsAtom),
+  calls: await callsStateOf($),
+  recorded: await read($, recordedAtom),
+  runningAgents: await runningAgentsOf($),
+  now: await $.clock.now(),
+});
+
+const drawnOf = async ($: Engine, config: Config): Promise<Drawn> =>
+  drawnFrom(await readOf($), config);
 
 const draw = async (
   $: Engine,
   config: Config,
-  isTurnEnd: boolean,
+  sourceTurnId?: string,
 ): Promise<void> => {
-  const drawn = await drawnOf($, config);
+  const snapshot = await readOf($);
+  const nonce = crypto.randomUUID();
+  // SDK update refreshes facts after each CAS miss. The source identity stays
+  // with the event, and each independent effect returns its own claim receipt.
+  const claimed = await update($, factsAtom, (facts) =>
+    offered(
+      facts,
+      offerOf(
+        drawnFrom({ ...snapshot, facts }, config),
+        sourceTurnId !== undefined,
+      ),
+      { nonce, turnId: sourceTurnId ?? snapshot.facts.turnId },
+    ),
+  );
+  const drawn = drawnFrom({ ...snapshot, facts: claimed }, config);
   $.ui.status(config.statusLine ? statusLineOf(drawn) : undefined);
-  const offer = offerOf(drawn, isTurnEnd);
-  if (offer.isSuggested) {
+  if (claimed.suggestionClaimer === nonce) {
     await $.prompt.suggest({ text: SUGGESTION });
   }
-  if (offer.toast !== "") {
-    $.ui.toast(offer.toast);
-  }
-  if (offer.isChanged) {
-    await update($, factsAtom, (facts) => offered(facts, offer));
+  if (claimed.crossing?.nonce === nonce) {
+    $.ui.toast(claimed.crossing.toast);
   }
 };
 
@@ -158,10 +164,10 @@ const settleP1 = async (
   config: Config,
   turn: Readonly<{ id: string; answer: string }>,
 ): Promise<void> => {
-  await draw($, config, true);
+  await draw($, config, turn.id);
   const value = await askKev($, config, turn.answer);
   await update($, factsAtom, (facts) => p1Settled(facts, turn.id, value));
-  await draw($, config, true);
+  await draw($, config, turn.id);
 };
 
 const onCompact = async (
@@ -189,9 +195,9 @@ const start = async ($: Engine, config: Config): Promise<void> => {
   });
   await update($, factsAtom, restarted);
   $.clock.every(REDRAW_MS, () => {
-    void quietly(draw($, config, false));
+    void quietly(draw($, config));
   });
-  await draw($, config, false);
+  await draw($, config);
 };
 
 // A new reading of the size, from the engine or from a compaction that stands
@@ -202,7 +208,7 @@ const noteSize = async (
   size: Pick<AdvisorFacts, "percent" | "tokens" | "window">,
 ): Promise<void> => {
   await update($, factsAtom, (facts) => ({ ...facts, ...size }));
-  await draw($, config, false);
+  await draw($, config);
 };
 
 // The model reads only an answer the rules already call ready: it can add a
@@ -213,12 +219,7 @@ const shouldCheck = async (
   e: Readonly<TurnCompleteInput>,
 ): Promise<boolean> => {
   const drawn = await drawnOf($, config);
-  // Tiny turns skip the paid check, as the small gate once did.
-  const isTiny = (drawn.facts.tokens ?? config.minTokens) < config.minTokens;
-  const isReady =
-    !isTiny &&
-    isCheckable(config, e.reason, e.answer) &&
-    isAsked(drawn.verdict.gate);
+  const isReady = isReadyToCheck(drawn, e);
   if (isReady) {
     await update($, factsAtom, (facts) => checked(facts, e.turnId, "pending"));
   }
@@ -232,8 +233,7 @@ const noteTurn = async (
 ): Promise<void> => {
   const now = await $.clock.now();
   await update($, factsAtom, turned(config, e, now));
-  const held = await read($, factsAtom);
-  const isKevAsked = held.p1.kind === "pending";
+  const { p1 } = await read($, factsAtom);
   // A failure of the optional check leaves the rules' verdict, never the turn.
   const isChecked = await orElse(shouldCheck($, config, e), false);
   // The render and the settling run out of the turn's dispatch: the answer
@@ -246,9 +246,9 @@ const noteTurn = async (
             settleCheck($, config, { id: e.turnId, answer: e.answer }),
           );
         }
-        await (isKevAsked
+        await (p1.kind === "pending"
           ? settleP1($, config, { id: e.turnId, answer: e.answer })
-          : draw($, config, true));
+          : draw($, config, e.turnId));
       })(),
     );
   });
@@ -259,7 +259,7 @@ const noteTurn = async (
  * @param on the registrar
  * @param options the `userConfig` values
  */
-export const register: Register = (on, options) => {
+export const register: Register = (on: AdvisorOn, options) => {
   const config = configOf(options);
   recordHooks(on);
   on("session.start", async ($, e, next) => {
@@ -271,6 +271,10 @@ export const register: Register = (on, options) => {
     const measured = await next(e);
     await noteSize($, config, e.context);
     return measured;
+  });
+  on("turn.start", { turnId: /.*/u }, async ($, e, next) => {
+    await update($, factsAtom, (facts) => begun(facts, e.turnId));
+    return next(e);
   });
   on("turn.complete", async ($, e, next) => {
     const completed = await next(e);

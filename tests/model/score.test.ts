@@ -46,6 +46,11 @@ test("each gate sets 0 and names itself, in order", () => {
     scoreOf(facts({ leftovers: { kind: "listed", text: "push" } }), CONFIG)
       .gate,
   ).toEqual({ kind: "leftovers", text: "push" });
+  // git could not say what is unpushed: that is a gate, not a clean answer.
+  expect(
+    scoreOf(signals({ unrecorded: { files: 0, commits: undefined } }), CONFIG)
+      .gate,
+  ).toEqual({ kind: "unpushed", count: undefined });
 });
 
 test("a small context is not worthwhile, not early", () => {

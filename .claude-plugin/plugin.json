@@ -80,7 +80,7 @@
     "modelCheck": {
       "type": "boolean",
       "title": "Model check of the answer",
-      "description": "When the rules say ready, haiku (your Claude Code subscription) reads the last answer's end and can only lower the verdict to early if the answer promises more work",
+      "description": "When the rules say ready, haiku (your Claude Code session's own API client and credentials; no additional plugin-specific key) reads the last answer's end and can only lower the verdict to early if the answer promises more work",
       "default": true
     },
     "language": {

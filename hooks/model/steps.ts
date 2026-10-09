@@ -1,13 +1,19 @@
 /**
  * The steps the advisor's facts take, pure: the hooks only run them.
  */
-import type { SessionCompactInput, TurnCompleteInput } from "claude-code";
+import type {
+  SessionCompactInput,
+  SessionCompactTrigger,
+  TurnCompleteInput,
+} from "claude-code";
 
 import type { AdvisorFacts, Checked, P1, Recorded } from "../../types";
 import type { Calls } from "./calls.ts";
 import type { Config } from "./config.ts";
+import type { Drawn } from "./format.ts";
 import { leftoversOf, ownerAskOf } from "./leftovers.ts";
 import type { Offer } from "./offer.ts";
+import { isAsked, isCheckable } from "./promise.ts";
 
 /**
  * A reload drops the timers: a pending priority verdict can never settle
@@ -25,18 +31,48 @@ export const restarted = (facts: AdvisorFacts): AdvisorFacts => ({
 });
 
 /**
- * The crossings a redraw has seen, remembered.
- * @param facts the facts held
- * @param offer what the redraw offered
- * @returns the facts
+ * Independent crossing and completed-turn effects, claimed by the SDK CAS.
+ * @param facts the current facts held, refreshed after each CAS miss
+ * @param offer the offer recomputed from current facts and the external reads
+ * @param claim the nonce and the source turn carried by this draw
+ * @returns the facts with admitted effects' serializable receipts
  */
 export const offered = (
   facts: AdvisorFacts,
-  offer: Pick<Offer, "isAbove" | "isAlerted">,
-): AdvisorFacts => ({
+  offer: Offer,
+  claim: Readonly<{ nonce: string; turnId: string | undefined }>,
+): AdvisorFacts => {
+  const isSuggested =
+    offer.isSuggested &&
+    facts.isTurnComplete !== false &&
+    claim.turnId !== undefined &&
+    facts.suggestedTurnId !== claim.turnId;
+  return claim.turnId === facts.turnId
+    ? {
+        ...facts,
+        wasAbove: offer.isAbove,
+        wasAlerted: offer.isAlerted,
+        ...(offer.toast !== "" && {
+          crossing: { nonce: claim.nonce, toast: offer.toast },
+        }),
+        ...(isSuggested && {
+          suggestedTurnId: claim.turnId,
+          suggestionClaimer: claim.nonce,
+        }),
+      }
+    : facts;
+};
+
+/**
+ * A main turn starts: any delayed effect still belongs to its older source.
+ * @param facts the held facts
+ * @param turnId the engine's new turn identity
+ * @returns the facts holding proposals until that turn completes
+ */
+export const begun = (facts: AdvisorFacts, turnId: string): AdvisorFacts => ({
   ...facts,
-  wasAbove: offer.isAbove,
-  wasAlerted: offer.isAlerted,
+  turnId,
+  isTurnComplete: false,
 });
 
 /**
@@ -64,6 +100,7 @@ export const turned =
       ownerAsk: ownerAskOf(e.answer, config.leftovers),
       p1: { kind: isKevAsked ? "pending" : "na" },
       turnId: e.turnId,
+      isTurnComplete: true,
       lastTurnAt: now,
     };
   };
@@ -86,6 +123,20 @@ export const p1Settled = (
 };
 
 /**
+ * Tiny turns skip the paid check; only a checkable, ready answer is asked.
+ * @param drawn the current facts, verdict and settings
+ * @param e the main turn's completed answer
+ * @returns whether this answer should be checked
+ */
+export const isReadyToCheck = (
+  drawn: Drawn,
+  e: Readonly<TurnCompleteInput>,
+): boolean =>
+  (drawn.facts.tokens ?? drawn.config.minTokens) >= drawn.config.minTokens &&
+  isCheckable(drawn.config, e.reason, e.answer) &&
+  isAsked(drawn.verdict.gate);
+
+/**
  * The model's check starts, or ends with its label; only a pending check of
  * that turn takes a label.
  * @param facts the facts held
@@ -98,16 +149,23 @@ export const checked = (
   id: string,
   state: Checked["state"],
 ): AdvisorFacts =>
-  state === "pending" ||
+  (state === "pending" && facts.turnId === id) ||
   (facts.promise?.turnId === id && facts.promise.state === "pending")
     ? { ...facts, promise: { turnId: id, state } }
     : facts;
+
+// The triggers that guard the main thread; precompute is not the user's ask.
+const GUARDED_TRIGGERS: ReadonlySet<SessionCompactTrigger> = new Set([
+  "manual",
+  "auto",
+  "plugin",
+]);
 
 /**
  * Whether a compaction is the main conversation's own, to carry the template.
  * @param config the settings
  * @param e the compaction
- * @returns true for a manual or auto compaction of the main thread
+ * @returns true for a manual, auto or plugin compaction of the main thread
  */
 export const isGuarded = (
   config: Config,
@@ -115,7 +173,7 @@ export const isGuarded = (
 ): boolean =>
   config.guardCompactions &&
   e.agentId === undefined &&
-  (e.trigger === "manual" || e.trigger === "auto");
+  GUARDED_TRIGGERS.has(e.trigger);
 
 /**
  * What the compaction template carries.

@@ -19,8 +19,9 @@ export interface Offer {
  * when the score first crosses the threshold, and never through a blocking
  * gate: the size alert wakes (a toast), but a gate holds the suggestion.
  * A redraw never brings back a suggestion the person dropped. The size alert
- * is separate: it asks at turn ends whatever the score, but not while agents
- * or background calls run, and toasts once per crossing.
+ * is separate: it asks at turn ends whatever the score, including an unknown
+ * background. Caps stay visible; known hard gates hold every suggestion.
+ * Crossings and completed-turn claims are admitted independently by the hooks.
  * @param drawn the verdict, the facts and the config
  * @param isTurnEnd whether the redraw follows a main turn's end
  * @returns what to do

@@ -17,7 +17,12 @@ call list when that mod is loaded, and the last answer of each main turn. It
 never compacts by itself and never cancels a compaction; it adds a fixed
 preservation template to the instructions of `/compact` and auto-compaction.
 
-One network call: the last answer's final 8000 characters are posted to Kev's
+The model check is on by default: the last answer's final 6000 characters are
+sent to haiku through your Claude Code session's own API client and credentials
+when the answer is eligible for checking. It can only add an unfinished-work
+gate, never lift one. Set `modelCheck` to false to disable it.
+
+Separately, the last answer's final 8000 characters are posted to Kev's
 System One endpoint (`systemOneUrl`, default `http://127.0.0.1:8010`) for the
 P1 signal. Only a loopback host is accepted; any other URL, or an empty one,
 turns P1 off and nothing is sent. Whatever listens on that loopback port
