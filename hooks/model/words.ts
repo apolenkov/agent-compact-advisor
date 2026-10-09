@@ -9,7 +9,6 @@ const RU = {
   good: "хороший момент для /compact",
   score: "оценка {n} из 100",
   unread: "размер контекста ещё неизвестен",
-  small: "контекст мал ({k})",
   agentsOne: "работает {n} агент",
   agentsFew: "работает {n} агента",
   agentsMany: "работают {n} агентов",
@@ -45,8 +44,8 @@ const RU = {
   leftoversIgnored:
     "- хвосты: не учитываются по настройке (вес снят, остальное пересчитано)",
   capBackground:
-    "- потолок 60: фоновые задачи неизвестны (нет agent-shell-watch)",
-  capLeftovers: "- потолок 60: в последнем ответе нет строк о хвостах",
+    "- потолок {n}: фоновые задачи неизвестны (нет agent-shell-watch)",
+  capLeftovers: "- потолок {n}: в последнем ответе нет строк о хвостах",
   gate: "- рано",
   alertNote:
     "- тревога: контекст {n}% не ниже порога {limit}%; в конце хода предлагается /compact",
@@ -61,7 +60,6 @@ const EN: Readonly<Record<keyof typeof RU, string>> = {
   good: "good moment to /compact",
   score: "score {n} of 100",
   unread: "context size not known yet",
-  small: "context is small ({k})",
   agentsOne: "{n} agent running",
   agentsFew: "{n} agents running",
   agentsMany: "{n} agents running",
@@ -97,8 +95,8 @@ const EN: Readonly<Record<keyof typeof RU, string>> = {
   leftoversIgnored:
     "- leftovers: not counted by setting (weight removed, the rest rescaled)",
   capBackground:
-    "- capped at 60: background tasks unknown (no agent-shell-watch)",
-  capLeftovers: "- capped at 60: the last answer has no leftover lines",
+    "- capped at {n}: background tasks unknown (no agent-shell-watch)",
+  capLeftovers: "- capped at {n}: the last answer has no leftover lines",
   gate: "- too early",
   alertNote:
     "- alert: context {n}% is at or above {limit}%; /compact is suggested at turn end",

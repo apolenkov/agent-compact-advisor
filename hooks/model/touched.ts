@@ -59,6 +59,6 @@ export const withTouched = (
   touched: readonly string[],
   added: readonly string[],
 ): readonly string[] =>
-  [...touched.filter((path) => !added.includes(path)), ...added].slice(
-    -TOUCHED_MAX,
-  );
+  [...new Set([...touched, ...added].toReversed())]
+    .toReversed()
+    .slice(-TOUCHED_MAX);

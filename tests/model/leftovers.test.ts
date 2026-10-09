@@ -59,6 +59,27 @@ test("a none word inside a longer value is not none", () => {
   });
 });
 
+test("a blank leftover value is unknown, even alongside explicit none", () => {
+  for (const answer of [
+    "Хвосты для агента:",
+    "Хвосты для агента:   ",
+    "Хвосты для агента:\nХвосты для владельца: нет",
+    "Хвосты для агента: нет\nХвосты для владельца:",
+  ]) {
+    expect(leftoversOf(answer, RULE)).toEqual({ kind: "unknown" });
+    expect(ownerAskOf(answer, RULE)).toBeUndefined();
+  }
+});
+
+test("a listed leftover wins over blank values", () => {
+  expect(
+    leftoversOf("Хвосты для агента:\nХвосты для владельца: выбрать план", RULE),
+  ).toEqual({ kind: "listed", text: "выбрать план", isOwner: true });
+  expect(
+    leftoversOf("Хвосты для агента: push\nХвосты для владельца:", RULE),
+  ).toEqual({ kind: "listed", text: "push" });
+});
+
 test("a prefix mid-sentence does not count", () => {
   expect(
     leftoversOf("I will end with Хвосты для агента: нет as usual", RULE),

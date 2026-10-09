@@ -43,3 +43,23 @@ test("each path once, the newest last, the oldest dropped past the limit", () =>
   expect(kept).toHaveLength(TOUCHED_MAX);
   expect(kept.at(-1)).toBe(`/p${String(TOUCHED_MAX + 4)}`);
 });
+
+test("repeated paths land once, in last-written order", () => {
+  expect(withTouched(["/a"], ["/b", "/b", "/c", "/b"])).toEqual([
+    "/a",
+    "/c",
+    "/b",
+  ]);
+  expect(withTouched(["/a", "/b", "/a"], [])).toEqual(["/b", "/a"]);
+});
+
+test("deduplication precedes the cap, retaining the recently repeated path", () => {
+  const unique = Array.from({ length: 40 }, (_, n) => `/p${String(n)}`);
+  const batch = ["/a", ...unique, "/a"];
+  const expected = [...unique.slice(1), "/a"];
+  for (const kept of [withTouched([], batch), withTouched(batch, [])]) {
+    expect(kept).toHaveLength(40);
+    expect(kept).toEqual(expected);
+    expect(kept.at(-1)).toBe("/a");
+  }
+});

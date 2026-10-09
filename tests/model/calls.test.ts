@@ -38,6 +38,52 @@ test("a loop whose body does work is not a waiter", () => {
   expect(isWaiter("sleep 600 && rm -rf build")).toBe(false);
 });
 
+test("curl health polls wait; uploads and output files are work", () => {
+  const cases = [
+    ["-f", true],
+    ["-fsS", true],
+    ["-sf", true],
+    ["--json @payload.json", false],
+    ["-sT artifact.tar", false],
+    ["--upload-file artifact.tar", false],
+    ["-s -X POST", false],
+    ["-O", false],
+    ["-sO", false],
+    ["--remote-name", false],
+    ["--remote-name-all", false],
+    ["--output file", false],
+    ["--output=file", false],
+  ] as const;
+  for (const [flags, waits] of cases) {
+    const command = `until curl ${flags} localhost:8010/health; do sleep 5; done`;
+    expect(isWaiter(command)).toBe(waits);
+    expect(classOf(call(command))).toBe(waits ? "waiter" : "work");
+  }
+  // gh keeps its own flags: -f field means a write for gh api.
+  expect(
+    isWaiter("until gh api -f title=x repos/o/r/issues; do sleep 5; done"),
+  ).toBe(false);
+  expect(
+    isWaiter(
+      "until gh api --input payload.json repos/o/r/issues; do sleep 5; done",
+    ),
+  ).toBe(false);
+});
+
+test("pipelines and OR controls keep polling read-only only", () => {
+  expect(
+    isWaiter("until curl -f localhost/health | grep -q OK; do sleep 5; done"),
+  ).toBe(true);
+  expect(
+    isWaiter("until curl -f localhost/health || true; do sleep 5; done"),
+  ).toBe(true);
+  expect(
+    isWaiter(
+      "until curl -f localhost/health || npm run build; do sleep 5; done",
+    ),
+  ).toBe(false);
+});
+
 test("a command that does not loop, sleep or watch is not a waiter", () => {
   expect(isWaiter("gh pr view 51")).toBe(false);
   expect(isWaiter("")).toBe(false);

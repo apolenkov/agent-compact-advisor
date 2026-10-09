@@ -1,7 +1,9 @@
 import { expect, test } from "claude-code/testing";
 
 import { configOf } from "../hooks/model/config.ts";
-import { scoreOf, type Signals } from "../hooks/model/score.ts";
+import type { Drawn } from "../hooks/model/format.ts";
+import { offerOf } from "../hooks/model/offer.ts";
+import { isCacheWarm, scoreOf, type Signals } from "../hooks/model/score.ts";
 import type { Leftovers } from "../types";
 import { SLICES } from "./fixtures/slices.ts";
 
@@ -50,7 +52,17 @@ const sliceOf = (line: string): Slice => {
   };
 };
 
-const CONFIG = configOf({});
+const CONFIG = configOf({ alertPercent: 0 });
+
+const drawnOf = (signals: Signals): Drawn => ({
+  facts: signals.facts,
+  verdict: scoreOf(signals, CONFIG),
+  config: CONFIG,
+  isBackgroundKnown: signals.liveCalls !== undefined,
+  isRecordKnown: signals.unrecorded !== undefined,
+  isCacheWarm: isCacheWarm(signals, CONFIG),
+  watchers: 0,
+});
 
 const LEFTOVERS: Readonly<Record<string, Leftovers>> = {
   agentListed: { kind: "listed", text: "x" },
@@ -93,7 +105,8 @@ const verdictOf = (slice: Slice): "can" | "early" => {
     unrecorded: { files: slice.edited ? 1 : 0, commits: slice.unpushed },
     now: 0,
   };
-  return scoreOf(signals, CONFIG).gate === undefined ? "can" : "early";
+  const offer = offerOf(drawnOf(signals), true);
+  return offer.isAbove && offer.isSuggested ? "can" : "early";
 };
 
 const slices: readonly Slice[] = SLICES.trim()
@@ -117,12 +130,63 @@ test("no false can against the resolved labels either", () => {
   expect(wrong.map((slice) => slice.id)).toEqual([]);
 });
 
-test("the false early are known: with no git state in the slices, an edit counts", () => {
+// Thirteen slices omit the git receipts which held the labellers' recorded
+// reports; S4-92 omits explicit none tails and is therefore capped below 70.
+const INCOMPLETE_GIT = [
+  "S2-963",
+  "S2-965",
+  "S2-966",
+  "S2-968",
+  "S2-969",
+  "S2-971",
+  "S2-973",
+  "S2-974",
+  "S2-975",
+  "S2-976",
+  "S2-977",
+  "S2-1003",
+  "S2-1006",
+];
+const ALLOWED_FALSE_EARLY = new Set([...INCOMPLETE_GIT, "S4-92"]);
+
+test("threshold 70 misses only the explained incomplete-git and unknown-tail IDs", () => {
   const missed = slices.filter(
     (slice) => slice.label === "can" && verdictOf(slice) === "early",
   );
-  // The 12 reports were written after edits the labellers saw recorded; the
-  // real advisor asks git, the slices cannot.
-  expect(missed.length).toBeLessThanOrEqual(slices.length);
-  expect(slices).toHaveLength(62);
+  expect(missed.filter((slice) => !ALLOWED_FALSE_EARLY.has(slice.id))).toEqual(
+    [],
+  );
+  expect(missed.length).toBeLessThanOrEqual(14);
 });
+
+// All safety signals are complete; alert is disabled so this is the score policy.
+for (const [tokens, score, isOffered] of [
+  [176_000, 69, false],
+  [180_000, 70, true],
+  [184_000, 71, true],
+] as const) {
+  test(`complete inputs score ${String(score)} and ${isOffered ? "offer" : "withhold"} at threshold 70`, () => {
+    const drawn = drawnOf({
+      facts: {
+        tokens,
+        percent: 18,
+        leftovers: { kind: "none" },
+        p1: { kind: "na" },
+        lastTurnAt: 0,
+        wasAbove: false,
+        wasAlerted: false,
+      },
+      runningAgents: 0,
+      liveCalls: 0,
+      unrecorded: { files: 0, commits: 0 },
+      now: 0,
+    });
+    expect(drawn.verdict.gate).toBeUndefined();
+    expect(drawn.verdict.caps).toEqual([]);
+    expect(drawn.verdict.score).toBe(score);
+    expect(offerOf(drawn, true)).toMatchObject({
+      isAbove: isOffered,
+      isSuggested: isOffered,
+    });
+  });
+}

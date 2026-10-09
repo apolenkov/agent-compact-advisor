@@ -120,19 +120,14 @@ jobs:
           pr=$(gh api -X GET "repos/$REPO/pulls" -f state=open -f head="$owner:$HEAD_BRANCH" --jq '.[0] // empty')
           [ -n "$pr" ] || { echo "no open PR for $HEAD_BRANCH"; exit 0; }
           # One jq pass over trusted API fields; nothing from the PR is evaluated.
-          read -r number head_repo head_sha author needs_human opt_in night_label < <(jq -r '
+          read -r number head_repo head_sha author needs_human opt_in < <(jq -r '
             [.number, .head.repo.full_name, .head.sha, .user.login,
              ([.labels[].name] | index("needs-human") != null),
-             ([.labels[].name] | index("autofix") != null),
-             ([.labels[].name] | index("night-fix") != null)] | @tsv' <<<"$pr")
+             ([.labels[].name] | index("autofix") != null)] | @tsv' <<<"$pr")
           [ "$head_repo" = "$REPO" ] || { echo "head repo $head_repo is not $REPO"; exit 0; }
           [ "$head_sha" = "$HEAD_SHA" ] || { echo "stale run: PR head moved on"; exit 0; }
           [ "$needs_human" = false ] || { echo "already needs-human"; exit 0; }
-          # night-fix.yml opens PRs as the bot for confirmed night-review findings: same-repo
-          # branch night-fix/*, label night-fix. Its commit already counts as attempt 1.
-          night_fix=false
-          if [ "$author" = "github-actions[bot]" ] && [ "$night_label" = true ] && [[ $HEAD_BRANCH == night-fix/* ]]; then night_fix=true; fi
-          if [ "$author" != "dependabot[bot]" ] && [ "$night_fix" != true ] && { [ "$author" != "$owner" ] || [ "$opt_in" != true ]; }; then
+          if [ "$author" != "dependabot[bot]" ] && { [ "$author" != "$owner" ] || [ "$opt_in" != true ]; }; then
             echo "author $author is not eligible"; exit 0
           fi
           # A red `secrets` (gitleaks) job is for a person, not the agent.
@@ -262,6 +257,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           HEAD_BRANCH: ${{ needs.gate.outputs.branch }}
+          BASE_SHA: ${{ needs.gate.outputs.sha }}
           ATTEMPT: ${{ needs.gate.outputs.attempt }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           PATCH: ${{ runner.temp }}/patch/fix.patch
@@ -300,9 +296,17 @@ jobs:
           git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
             commit -q -m "fix(repo): autofix the failing check (attempt $ATTEMPT)" -m "Autofix-Attempt: $ATTEMPT
           Autofix-Run: $RUN_URL"
-          # Not a fast-forward: the branch moved on, and its new head starts its own cycle.
-          git push "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "HEAD:refs/heads/${HEAD_BRANCH}" \
-            || { echo "branch moved, nothing pushed"; exit 0; }
+          # Not a fast-forward is benign: the branch moved on, and its new head
+          # starts its own cycle. Every other failure (auth, network) must reach
+          # the escalate job, or the fix is dropped silently.
+          if ! git push "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "HEAD:refs/heads/${HEAD_BRANCH}"; then
+            if moved=$(git ls-remote "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "refs/heads/${HEAD_BRANCH}" | cut -f1) \
+              && [ -n "$moved" ] && [ "$moved" != "$BASE_SHA" ]; then
+              echo "branch moved, nothing pushed"; exit 0
+            fi
+            echo "reason=the fix could not be pushed" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
           # The push starts pull_request runs for this head, but the bot counts as
           # an outside contributor and they wait for approval (status completed,
           # conclusion action_required), which hides any

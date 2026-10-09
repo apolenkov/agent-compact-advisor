@@ -23,8 +23,8 @@ export interface Signals {
 export interface Unrecorded {
   /** Files changed, not committed. */
   readonly files: number;
-  /** Commits made, not pushed. */
-  readonly commits: number;
+  /** Commits made, not pushed; undefined when git could not say. */
+  readonly commits: number | undefined;
 }
 
 /** One weighted part of the score, its value 0..1. */
@@ -42,7 +42,7 @@ export type Gate =
   | Readonly<{ kind: "stale"; count: number }>
   | Readonly<{ kind: "runner"; count: number }>
   | Readonly<{ kind: "edits"; count: number }>
-  | Readonly<{ kind: "unpushed"; count: number }>
+  | Readonly<{ kind: "unpushed"; count: number | undefined }>
   | Readonly<{ kind: "leftovers"; text: string }>
   | Readonly<{ kind: "checking" }>
   | Readonly<{ kind: "owes" }>
@@ -62,7 +62,8 @@ export interface Verdict {
 
 const PERCENT = 100;
 const KILO = 1000;
-const UNKNOWN_CAP = 60;
+/** The score where an unseen signal caps it; the cap phrases take it as {n}. */
+export const UNKNOWN_CAP = 60;
 // The fill part is complete at this share of the window at most.
 const FULL_SHARE = 0.9;
 const WEIGHTS = { fill: 40, leftovers: 30, cache: 10 } as const;
@@ -72,8 +73,9 @@ const recordGates = (unrecorded: Unrecorded | undefined): readonly Gate[] => [
   ...((unrecorded?.files ?? 0) > 0
     ? [{ kind: "edits" as const, count: unrecorded?.files ?? 0 }]
     : []),
-  ...((unrecorded?.commits ?? 0) > 0
-    ? [{ kind: "unpushed" as const, count: unrecorded?.commits ?? 0 }]
+  // Unknown is not zero: a repository that cannot say holds its gate.
+  ...(unrecorded !== undefined && unrecorded.commits !== 0
+    ? [{ kind: "unpushed" as const, count: unrecorded.commits }]
     : []),
 ];
 

@@ -121,11 +121,19 @@ test("every main compaction gets the template; others pass untouched", async ($,
     instructions: "keep API notes",
   });
   await $.session.compact({ messages: MESSAGES, trigger: "auto" });
+  await $.session.compact({ messages: MESSAGES, trigger: "plugin" });
   await $.session.compact({ messages: MESSAGES, trigger: "precompute" });
+  for (const trigger of ["manual", "auto", "plugin"] as const) {
+    await $.session.compact({ messages: MESSAGES, trigger, agentId: "worker" });
+  }
   expect(seen.compactions).toEqual([
     TEMPLATE,
     `keep API notes\n\n${TEMPLATE}`,
     TEMPLATE,
+    TEMPLATE,
+    undefined,
+    undefined,
+    undefined,
     undefined,
   ]);
 });

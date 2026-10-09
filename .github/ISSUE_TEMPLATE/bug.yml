@@ -6,6 +6,12 @@ body:
     id: version
     attributes: { label: Claude Code version, placeholder: "claude --version" }
     validations: { required: true }
+  - type: input
+    id: mod-version
+    attributes:
+      label: agent-compact-advisor version
+      placeholder: "the plugin's version, e.g. 0.5.1"
+    validations: { required: true }
   - type: textarea
     id: what
     attributes: { label: What happened and what you expected }
@@ -14,5 +20,8 @@ body:
     id: debug
     attributes:
       label: Debug log
-      description: Lines naming agent-compact-advisor from `claude --debug` (~/.claude/debug/latest)
+      description: >-
+        Lines naming agent-compact-advisor from `claude --debug`
+        (~/.claude/debug/latest). Strip paths, tokens and credentials before
+        pasting.
       render: text

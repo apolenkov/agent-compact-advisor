@@ -3,3 +3,10 @@ node_modules/
 .claude-plugin/types/
 .DS_Store
 evals/results/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.npmrc
+secrets.*

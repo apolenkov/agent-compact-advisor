@@ -41,7 +41,11 @@ const READ_ONLY = new Set([
 ]);
 const GH_READ = new Set(["view", "checks", "status", "list", "watch"]);
 const GH_AREAS = new Set(["pr", "run", "issue", "release", "repo"]);
-const WRITE_FLAG = /^(?:-[XfFdo]|--(?:method|field|raw-field|data))/u;
+// gh and curl read their flags differently: gh's -f/-F are fields (a POST),
+// curl's -f is --fail, a read; uploads and output files are work.
+const GH_WRITE = /^(?:-[A-Za-z]*[XfF]|--(?:method|field|raw-field|input))/u;
+const CURL_WRITE =
+  /^(?:-[A-Za-z]*[XdFToO]|--(?:data|form|json|upload-file|request|output|remote-name))/u;
 const SEPARATORS = /\$\(|&&|[`)|;{}\n]/gu;
 const ASSIGNMENT = /^[A-Za-z_]\w*=/u;
 const LOOPS = /\b(?:until|while|for)\b|\bsleep\b|\bgh\s+run\s+watch\b/u;
@@ -56,21 +60,27 @@ const wordsOf = (line: string): readonly string[] =>
     .split(/\s+/u)
     .filter((word) => word !== "");
 
-const isReadOnlyFlags = (words: readonly string[]): boolean =>
-  words.every((word) => !WRITE_FLAG.test(word));
+const isReadOnlyFlags = (
+  words: readonly string[],
+  isWrite: (word: string) => boolean,
+): boolean => words.every((word) => !isWrite(word));
 
 // A gh call is a poll only for the read subcommands and a get-only api.
 const isGhRead = (words: readonly string[]): boolean => {
   const [, area = "", action = ""] = words;
   return area === "api"
-    ? isReadOnlyFlags(words)
+    ? isReadOnlyFlags(words, (word) => GH_WRITE.test(word))
     : GH_AREAS.has(area) && GH_READ.has(action);
 };
 
 const CHECKS: ReadonlyMap<string, (words: readonly string[]) => boolean> =
   new Map([
     ["gh", isGhRead],
-    ["curl", isReadOnlyFlags],
+    [
+      "curl",
+      (words: readonly string[]) =>
+        isReadOnlyFlags(words, (word) => CURL_WRITE.test(word)),
+    ],
   ]);
 
 const isReadOnlyLine = (line: string): boolean => {
@@ -78,7 +88,7 @@ const isReadOnlyLine = (line: string): boolean => {
   const [first = ""] = words;
   const body = LEADERS.has(first) ? words.slice(1) : words;
   const [head = ""] = body;
-  const isSyntax = body.length === 0 || BARE.has(first) || BARE.has(head);
+  const isSyntax = body.length === 0 || BARE.has(head);
   return (
     isSyntax ||
     (CHECKS.get(head) ?? ((all) => READ_ONLY.has(all[0] ?? "")))(body)

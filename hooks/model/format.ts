@@ -4,7 +4,7 @@
  */
 import type { AdvisorFacts } from "../../types";
 import type { Config } from "./config.ts";
-import { type Gate, kOf, type Verdict } from "./score.ts";
+import { type Gate, kOf, UNKNOWN_CAP, type Verdict } from "./score.ts";
 import { formOf, type Phrase, say } from "./words.ts";
 
 const DECIMALS = 2;
@@ -24,7 +24,7 @@ export interface Drawn {
 }
 
 const gateWords = (language: Config["language"], gate: Gate): string => {
-  const count = "count" in gate ? gate.count : 0;
+  const count = ("count" in gate ? gate.count : 0) ?? 0;
   const form = formOf(language, count);
   const phrases: Readonly<Record<Gate["kind"], string>> = {
     unread: say(language, "unread"),
@@ -35,7 +35,9 @@ const gateWords = (language: Config["language"], gate: Gate): string => {
     stale: say(language, "stale", { n: count }),
     runner: say(language, "runner", { n: count }),
     edits: say(language, "edits", { n: count }),
-    unpushed: say(language, "unpushed", { n: count }),
+    unpushed: say(language, "unpushed", {
+      n: gate.kind === "unpushed" ? (gate.count ?? "?") : count,
+    }),
     checking: say(language, "checking"),
     owes: say(language, "owes"),
     p1: say(language, "goalPending"),
@@ -196,6 +198,7 @@ const noteOf = (drawn: Drawn): readonly string[] => {
           say(
             language,
             cap === "background" ? "capBackground" : "capLeftovers",
+            { n: UNKNOWN_CAP },
           ),
         ),
       ]

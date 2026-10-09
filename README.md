@@ -19,7 +19,7 @@ A Claude Code mod that tells you how good a moment it is to `/compact` now,
 and why, and makes compaction safer. It never compacts by itself.
 
 ```
-agent-compact-advisor: хороший момент для /compact: оценка 98 из 100 · контекст 400k (40%) · хвостов нет · цель достигнута с вероятностью 90% · кэш тёплый
+agent-compact-advisor: хороший момент для /compact: оценка 90 из 100 · контекст 400k (40%) · хвостов нет · цель достигнута с вероятностью 90% · кэш тёплый
 agent-compact-advisor: можно подождать: оценка 50 из 100 · контекст 400k (40%) · хвосты неизвестны · кэш остыл
 agent-compact-advisor: рано: идёт фоновая задача · контекст 243k (24%)
 agent-compact-advisor: рано: работает 2 агента · контекст 400k (40%)
@@ -108,8 +108,13 @@ A known context under `minTokens` (100k) has score 0 without a size gate:
 Kev's probability is a ceiling, not a weighted part: 0.55 caps the score at 55.
 A pending verdict gates, including after a reload; an unavailable verdict
 adds no ceiling. Unknown background work (agent-shell-watch not loaded) or
-missing leftover lines cap the score at the lower of 60 and `threshold - 1`.
-The size alert remains a separate trigger when no gate holds.
+missing or blank leftover lines cap the score at the lower of 60 and `threshold - 1`.
+The size alert remains a separate reason to suggest `/compact` at an eligible
+main-turn end, including when background work is unknown. It never raises the
+score or removes the visible uncertainty/caps, and known hard gates still hold
+its suggestion. A toast belongs to one threshold crossing; a suggestion belongs
+to one completed turn. A new completed turn may suggest again; redraw timers and
+late results from an older turn cannot repeat or claim that suggestion.
 With `ignoreLeftovers` the leftovers part leaves the sum (the rest is
 rescaled) and never gates or caps: for a coordinator session, whose leftovers
 always say "wait for the others". Running agents, background work and
@@ -119,6 +124,9 @@ unrecorded changes still gate independently of that setting.
 `Хвосты для владельца:` (the last of each counts; list marks, quotes, bold and
 code are tolerated). Both prefixes and the words meaning none (`нет`, `none`)
 are settings: for an English convention set `leftoverPrefixes` to `Leftovers:`.
+A blank value means unknown, adds no points for explicit none and lists no work.
+A listed value takes priority over blank values; explicit none remains none
+when no value is blank.
 
 **Words.** The status line, toasts and `/compact-advisor` use plain words, no
 abbreviations, in `language`: `ru` (default, like the Russian leftover

@@ -37,10 +37,11 @@ import sys
 ROOT = os.path.expanduser("~/.claude/projects")
 
 TAIL_RE = re.compile(
-    r"^\s*[>*_+\-]*\s*(?:\d+[.)]\s*)?Хвосты для (агента|владельца|человека)\s*:?\s*(.*)$",
+    r"^[^\S\r\n]*[>*_+\-]*[^\S\r\n]*(?:\d+[.)][^\S\r\n]*)?"
+    r"Хвосты для (агента|владельца|человека)[^\S\r\n]*:?[^\S\r\n]*(.*)$",
     re.M,
 )
-NONE_WORDS = {"нет", "none", ""}
+NONE_WORDS = {"нет", "none"}
 PROMISE_RE = re.compile(
     r"(потом|позже|затем|вернусь|вернёмся|осталось\s+(сделать|доделать)|"
     r"надо будет|нужно будет|сделаю|доделаю|докручу|i will|i'll|next i|"
@@ -74,13 +75,8 @@ GIT_COMMIT_RE = re.compile(r"\bgit\s+(?:-C\s+\S+\s+)?commit\b")
 GIT_PUSH_RE = re.compile(
     r"\bgit\s+(?:-C\s+\S+\s+)?push\b|gh\s+pr\s+(merge|create)\b"
 )
-WAITER_RE = re.compile(
-    r"\b(until|while|for)\b.*\b(sleep|gh\s+(pr|run|api)|curl|test|\[)", re.S
-)
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
-READ_TOOLS = {"Bash", "Read", "Grep", "Glob"}
 TASKID_RE = re.compile(r"<task-id>(\w+)</task-id>")
-BGID_RE = re.compile(r"background with ID: (\w+)")
 
 
 def msg_of(d):
@@ -128,9 +124,11 @@ def leftovers(text):
     vals = [v.strip().lower().rstrip(".") for _, v in hits]
     if all(v in NONE_WORDS for v in vals):
         return "none"
-    if any(w == "агента" and v not in NONE_WORDS for w, v in hits):
+    if any(w == "агента" and v and v not in NONE_WORDS for (w, _), v in zip(hits, vals)):
         return "listed_agent"
-    return "listed_owner"
+    if any(v and v not in NONE_WORDS for v in vals):
+        return "listed_owner"
+    return "unknown"
 
 
 def shingle(s):
@@ -177,17 +175,17 @@ def analyze(recs):
         if d.get("type") == "system"
         and d.get("subtype") == "compact_boundary"
     ]
+    # task-notifications land anywhere the journal puts them
+    notified = {}
+    for i, d in enumerate(recs):
+        blob = json.dumps(d, ensure_ascii=False)
+        if "task-notification" in blob:
+            for tid in TASKID_RE.findall(blob):
+                notified.setdefault(tid, i)
     for bi in bounds:
         b = recs[bi]
         meta = b.get("compactMetadata") or {}
         pre, post = recs[:bi], recs[bi + 1 : next((j for j in bounds if j > bi), len(recs))]
-        # task-notifications land anywhere the journal puts them
-        notified = {}
-        for i, d in enumerate(recs):
-            blob = json.dumps(d, ensure_ascii=False)
-            if "task-notification" in blob:
-                for tid in TASKID_RE.findall(blob):
-                    notified.setdefault(tid, i)
         # PRE: last answer's tails/promise, git, pending calls
         pre_ass = [d for d in pre if d.get("type") == "assistant"]
         last_text = ""
