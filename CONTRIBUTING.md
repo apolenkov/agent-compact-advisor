@@ -7,6 +7,10 @@ npm ci            # installs tooling and the git hooks (lefthook)
 npm run check     # format, typecheck, lint, repo lint, validate, tests
 ```
 
+CI follows the latest Node 26 release through `.nvmrc` and installs npm 12.2.0.
+For matching local checks, use Node 26.11.1 and npm 12.2.0 (verified 2026-10-09)
+with a local runtime or an existing version manager.
+
 agent-compact-advisor needs Claude Code 2.1.287+ (mods are on by default). Try it live with
 `claude --plugin-dir .` from the repository root.
 
@@ -55,5 +59,6 @@ with a login in CI).
 ## Dependency holds
 
 - `typescript` stays on 6.x (6.0.3): `typescript-eslint` 8.71.1, its latest,
-  declares the peer `typescript >=4.8.4 <6.1.0`. Take TypeScript 7 once it widens
+  declares the peer `typescript >=4.8.4 <6.1.0` (registry verified 2026-10-09).
+  TypeScript 7.0.2 is outside that range. Take TypeScript 7 once it widens
   that range; drop the Dependabot `ignore` for `typescript` then.
