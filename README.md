@@ -201,9 +201,10 @@ Set in `/config`.
 ## Privacy
 
 The model check sends the last answer's final 6000 characters to haiku through
-your own Claude Code session (its subscription and client; no key, no other
-party), only on a turn whose answer the rules do not already hold back, and a
-failure or an unclear reply leaves the rules' verdict as it is. The model can
+your Claude Code session's own API client and credentials, without an
+additional plugin-specific key, only on a turn whose answer the rules do not
+already hold back, and a failure or an unclear reply leaves the rules' verdict
+as it is. The model can
 only add the gate "the answer promises more work", never lift one. Besides
 it, one network call, on loopback only: P1 posts the last answer's final 8000
 characters to `systemOneUrl`. No key, no telemetry, nothing stored across
